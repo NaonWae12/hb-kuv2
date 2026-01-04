@@ -12,6 +12,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // If the base table doesn't exist yet (fresh installs), this migration would fail.
+        // The latest schema is handled by the create migration.
+        if (!Schema::hasTable('form_text_formatting')) {
+            return;
+        }
+
         Schema::table('form_text_formatting', function (Blueprint $table) {
             // Add result_rule_text_id column if it doesn't exist
             if (!Schema::hasColumn('form_text_formatting', 'result_rule_text_id')) {
@@ -21,9 +27,13 @@ return new class extends Migration
             // Update enum to include result_setting_title and result_setting_text
             // Note: MySQL doesn't support ALTER ENUM directly, so we need to modify the column
             // Check current enum values first
-            $currentEnum = DB::select("SHOW COLUMNS FROM `form_text_formatting` WHERE Field = 'element_type'")[0] ?? null;
-            if ($currentEnum && strpos($currentEnum->Type, 'result_setting_title') === false) {
-                DB::statement("ALTER TABLE `form_text_formatting` MODIFY COLUMN `element_type` ENUM('form_title', 'form_description', 'question_title', 'section_title', 'section_description', 'result_setting_title', 'result_setting_text') NOT NULL");
+            try {
+                $currentEnum = DB::select("SHOW COLUMNS FROM `form_text_formatting` WHERE Field = 'element_type'")[0] ?? null;
+                if ($currentEnum && isset($currentEnum->Type) && strpos($currentEnum->Type, 'result_setting_title') === false) {
+                    DB::statement("ALTER TABLE `form_text_formatting` MODIFY COLUMN `element_type` ENUM('form_title', 'form_description', 'question_title', 'section_title', 'section_description', 'result_setting_title', 'result_setting_text') NOT NULL");
+                }
+            } catch (\Throwable $e) {
+                // If enum update fails, proceed; column addition and unique index can still apply.
             }
         });
         
