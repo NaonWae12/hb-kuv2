@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\SimpleType\Jc;
 
 class FormController extends Controller
 {
@@ -635,311 +638,6 @@ class FormController extends Controller
             'success' => true,
             'data' => $data,
         ]);
-    }
-
-    public function export(Form $form, Request $request)
-    {
-        if ($form->user_id !== Auth::id()) {
-            abort(403);
-        }
-
-        $type = $request->get('type', 'summary'); // 'summary' or 'individual'
-        
-        $data = $this->buildResponseData($form);
-        
-        // Create new Word document
-        $phpWord = new \PhpOffice\PhpWord\PhpWord();
-        
-        // Set document properties
-        $properties = $phpWord->getDocInfo();
-        $properties->setCreator('Hb-ku Form Builder');
-        $properties->setTitle(strip_tags($form->title) . ' - Export Responses');
-        $properties->setDescription('Export responses dari form: ' . strip_tags($form->title));
-        
-        // Add section
-        $section = $phpWord->addSection([
-            'marginTop' => 1440,
-            'marginBottom' => 1440,
-            'marginLeft' => 1440,
-            'marginRight' => 1440,
-        ]);
-        
-        // Add title
-        $section->addText(
-            strip_tags($form->title),
-            ['bold' => true, 'size' => 16],
-            ['alignment' => \PhpOffice\PhpWord\SimpleType\Jc::CENTER]
-        );
-        
-        if ($form->description) {
-            $section->addText(
-                strip_tags($form->description),
-                ['size' => 12],
-                ['alignment' => \PhpOffice\PhpWord\SimpleType\Jc::CENTER]
-            );
-        }
-        
-        $section->addTextBreak(2);
-        
-        // Add summary information
-        $section->addText(
-            'Total Jawaban: ' . $data['totalResponses'],
-            ['bold' => true, 'size' => 12]
-        );
-        $section->addTextBreak(1);
-        
-        // Collect temporary chart image files for cleanup
-        $tempChartFiles = [];
-        
-        if ($type === 'summary') {
-            // Export summary
-            $section->addText(
-                'SUMMARY RESPONSES',
-                ['bold' => true, 'size' => 14]
-            );
-            $section->addTextBreak(1);
-            
-            foreach ($data['questionSummaries'] as $index => $summary) {
-                $section->addText(
-                    'Pertanyaan ' . ($index + 1) . ': ' . strip_tags($summary['title']),
-                    ['bold' => true, 'size' => 12]
-                );
-                $section->addText('Total Jawaban: ' . $summary['total'], ['size' => 11]);
-                
-                if ($summary['chart']) {
-                    $section->addText('Hasil:', ['bold' => true, 'size' => 11]);
-                    
-                    // Generate chart image
-                    $chartImagePath = $this->generateChartImage($summary['chart'], $summary['id']);
-                    if ($chartImagePath && file_exists($chartImagePath)) {
-                        $tempChartFiles[] = $chartImagePath;
-                        $section->addImage(
-                            $chartImagePath,
-                            [
-                                'width' => 400,
-                                'height' => 300,
-                                'alignment' => \PhpOffice\PhpWord\SimpleType\Jc::CENTER,
-                            ]
-                        );
-                        $section->addTextBreak(1);
-                    }
-                    
-                    // Also add text summary
-                    foreach ($summary['chart']['labels'] as $labelIndex => $label) {
-                        $section->addText(
-                            '  - ' . strip_tags($label) . ': ' . $summary['chart']['values'][$labelIndex] . ' jawaban',
-                            ['size' => 11]
-                        );
-                    }
-                } elseif (!empty($summary['text_answers'])) {
-                    $section->addText('Jawaban:', ['bold' => true, 'size' => 11]);
-                    foreach ($summary['text_answers'] as $answer) {
-                        $section->addText('  - ' . strip_tags($answer), ['size' => 11]);
-                    }
-                }
-                
-                $section->addTextBreak(1);
-            }
-        } else {
-            // Export individual responses
-            $section->addText(
-                'INDIVIDUAL RESPONSES',
-                ['bold' => true, 'size' => 14]
-            );
-            $section->addTextBreak(1);
-            
-            foreach ($data['individualResponses'] as $index => $response) {
-                $section->addText(
-                    'Jawaban #' . ($index + 1),
-                    ['bold' => true, 'size' => 12]
-                );
-                $section->addText('Email: ' . ($response['email'] ?? 'Anonim'), ['size' => 11]);
-                $section->addText('Tanggal: ' . $response['submitted_at'], ['size' => 11]);
-                $section->addText('Skor Total: ' . ($response['total_score'] ?? 0), ['size' => 11]);
-                
-                if (!empty($response['answers'])) {
-                    $section->addText('Jawaban:', ['bold' => true, 'size' => 11]);
-                    foreach ($response['answers'] as $answer) {
-                        $section->addText(
-                            'Q: ' . strip_tags($answer['question']),
-                            ['bold' => true, 'size' => 11]
-                        );
-                        $section->addText(
-                            'A: ' . strip_tags($answer['value']),
-                            ['size' => 11]
-                        );
-                    }
-                }
-                
-                $section->addTextBreak(2);
-            }
-        }
-        
-        // Save file
-        $filename = 'export_' . $form->slug . '_' . $type . '_' . date('Y-m-d_His') . '.docx';
-        $tempFile = tempnam(sys_get_temp_dir(), 'phpword_');
-        
-        $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
-        $objWriter->save($tempFile);
-        
-        // Cleanup chart images after download
-        register_shutdown_function(function () use ($tempChartFiles) {
-            foreach ($tempChartFiles as $chartFile) {
-                if (file_exists($chartFile)) {
-                    @unlink($chartFile);
-                }
-            }
-        });
-        
-        return response()->download($tempFile, $filename)->deleteFileAfterSend(true);
-    }
-
-    /**
-     * Generate chart image using GD library
-     */
-    private function generateChartImage(array $chartData, int $questionId): ?string
-    {
-        if (!function_exists('imagecreatetruecolor')) {
-            return null; // GD library not available
-        }
-
-        $type = $chartData['type'] ?? 'pie';
-        $labels = $chartData['labels'] ?? [];
-        $values = $chartData['values'] ?? [];
-
-        if (empty($labels) || empty($values)) {
-            return null;
-        }
-
-        $width = 600;
-        $height = 400;
-        $image = imagecreatetruecolor($width, $height);
-
-        // Colors
-        $white = imagecolorallocate($image, 255, 255, 255);
-        $black = imagecolorallocate($image, 0, 0, 0);
-        $gray = imagecolorallocate($image, 200, 200, 200);
-        $colors = [
-            imagecolorallocate($image, 248, 113, 113), // #F87171
-            imagecolorallocate($image, 251, 191, 36), // #FBBF24
-            imagecolorallocate($image, 52, 211, 153), // #34D399
-            imagecolorallocate($image, 96, 165, 250), // #60A5FA
-            imagecolorallocate($image, 167, 139, 250), // #A78BFA
-            imagecolorallocate($image, 244, 114, 182), // #F472B6
-            imagecolorallocate($image, 249, 115, 22), // #F97316
-            imagecolorallocate($image, 45, 212, 191), // #2DD4BF
-        ];
-
-        // Fill background
-        imagefilledrectangle($image, 0, 0, $width, $height, $white);
-
-        if ($type === 'pie') {
-            $this->drawPieChart($image, $labels, $values, $colors, $black, $width, $height);
-        } else {
-            $this->drawBarChart($image, $labels, $values, $colors, $black, $gray, $width, $height);
-        }
-
-        // Save to temporary file
-        $tempFile = sys_get_temp_dir() . '/chart_' . $questionId . '_' . time() . '.png';
-        imagepng($image, $tempFile);
-        imagedestroy($image);
-
-        return $tempFile;
-    }
-
-    private function drawPieChart($image, array $labels, array $values, array $colors, $textColor, int $width, int $height): void
-    {
-        $centerX = $width / 2;
-        $centerY = $height / 2;
-        $radius = min($width, $height) / 3;
-        $startAngle = 0;
-
-        $total = array_sum($values);
-        if ($total == 0) return;
-
-        $labelY = 50;
-        $legendX = 50;
-        $legendSpacing = 25;
-
-        foreach ($values as $index => $value) {
-            if ($value == 0) continue;
-
-            $percentage = ($value / $total) * 100;
-            $angle = ($value / $total) * 360;
-
-            $color = $colors[$index % count($colors)];
-
-            // Draw pie slice
-            imagefilledarc(
-                $image,
-                $centerX,
-                $centerY,
-                $radius * 2,
-                $radius * 2,
-                $startAngle,
-                $startAngle + $angle,
-                $color,
-                IMG_ARC_PIE
-            );
-
-            // Draw legend
-            $label = strip_tags($labels[$index] ?? 'Label ' . ($index + 1));
-            if (strlen($label) > 30) {
-                $label = substr($label, 0, 27) . '...';
-            }
-            $legendText = $label . ' (' . $value . ')';
-            
-            // Color box
-            imagefilledrectangle($image, $legendX, $labelY - 10, $legendX + 15, $labelY + 5, $color);
-            imagerectangle($image, $legendX, $labelY - 10, $legendX + 15, $labelY + 5, $textColor);
-            
-            // Text
-            imagestring($image, 3, $legendX + 20, $labelY - 8, $legendText, $textColor);
-            $labelY += $legendSpacing;
-
-            $startAngle += $angle;
-        }
-    }
-
-    private function drawBarChart($image, array $labels, array $values, array $colors, $textColor, $gridColor, int $width, int $height): void
-    {
-        $margin = 60;
-        $chartWidth = $width - ($margin * 2);
-        $chartHeight = $height - ($margin * 2);
-        $barWidth = $chartWidth / max(count($values), 1);
-        $maxValue = max($values) ?: 1;
-
-        // Draw grid lines
-        $gridLines = 5;
-        for ($i = 0; $i <= $gridLines; $i++) {
-            $y = $margin + ($chartHeight / $gridLines) * $i;
-            imageline($image, $margin, $y, $width - $margin, $y, $gridColor);
-            $value = $maxValue - (($maxValue / $gridLines) * $i);
-            imagestring($image, 2, 10, $y - 7, (int)$value, $textColor);
-        }
-
-        // Draw bars
-        foreach ($values as $index => $value) {
-            $barHeight = ($value / $maxValue) * $chartHeight;
-            $x = $margin + ($barWidth * $index) + ($barWidth * 0.1);
-            $barActualWidth = $barWidth * 0.8;
-            $y = $margin + $chartHeight - $barHeight;
-
-            $color = $colors[$index % count($colors)];
-            imagefilledrectangle($image, $x, $y, $x + $barActualWidth, $margin + $chartHeight, $color);
-            imagerectangle($image, $x, $y, $x + $barActualWidth, $margin + $chartHeight, $textColor);
-
-            // Value label on top of bar
-            imagestring($image, 3, $x + ($barActualWidth / 2) - 10, $y - 20, (string)$value, $textColor);
-
-            // Label below bar
-            $label = strip_tags($labels[$index] ?? 'Label ' . ($index + 1));
-            if (strlen($label) > 15) {
-                $label = substr($label, 0, 12) . '...';
-            }
-            $labelX = $x + ($barActualWidth / 2) - (strlen($label) * 3);
-            imagestring($image, 2, $labelX, $margin + $chartHeight + 5, $label, $textColor);
-        }
     }
 
     private function buildResponseData(Form $form): array
@@ -2654,6 +2352,936 @@ class FormController extends Controller
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Export summary responses ke Word document
+     */
+    public function exportSummary(Form $form)
+    {
+        if ($form->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $responseData = $this->buildResponseData($form);
+        $questionSummaries = $responseData['questionSummaries'];
+        $totalResponses = $responseData['totalResponses'];
+
+        // Load result rules - temporarily disabled
+        // TODO: Re-enable after fixing the issue
+        /*
+        try {
+            $form->load([
+                'resultRules' => function ($query) {
+                    $query->with(['texts' => function ($textQuery) {
+                        $textQuery->orderBy('order')->with('textSetting');
+                    }])->orderBy('order');
+                },
+            ]);
+        } catch (\Exception $e) {
+            // If loading result rules fails, continue without them
+            Log::warning('Error loading result rules for Word export', [
+                'error' => $e->getMessage(),
+                'form_id' => $form->id,
+            ]);
+        }
+        */
+
+        // Create new Word document
+        $phpWord = new PhpWord();
+
+        // Set default font to Cambria
+        $phpWord->setDefaultFontName('Cambria');
+        $phpWord->setDefaultFontSize(11);
+
+        // Set document properties
+        $properties = $phpWord->getDocInfo();
+        $properties->setCreator('Hb-ku Form Builder');
+        $properties->setTitle(strip_tags($form->title ?? 'Form') . ' - Export Summary');
+        $properties->setDescription('Export summary responses dari form: ' . strip_tags($form->title ?? 'Form'));
+
+        $section = $phpWord->addSection([
+            'marginTop' => 1440,
+            'marginRight' => 1440,
+            'marginBottom' => 1440,
+            'marginLeft' => 1440,
+        ]);
+
+        // Collect temporary chart image files for cleanup
+        $tempChartFiles = [];
+
+        // Define table style with borders
+        $tableStyle = [
+            'borderSize' => 6,
+            'borderColor' => '000000',
+            'cellMargin' => 80,
+        ];
+
+        // Define cell style for title row
+        $titleCellStyle = [
+            'bgColor' => 'E5E5E5',
+            'valign' => 'center',
+        ];
+
+        // Header Table with border
+        $headerTable = $section->addTable($tableStyle);
+        $headerTable->addRow();
+        $headerCell = $headerTable->addCell(10000, $titleCellStyle);
+        $headerCell->addText(
+            '🩸 ' . $this->stripHtml($form->title ?? 'Form') . ' 🩸',
+            ['bold' => true, 'size' => 18, 'name' => 'Cambria'],
+            ['alignment' => Jc::CENTER, 'spaceAfter' => 120]
+        );
+
+        if ($form->description) {
+            $headerTable->addRow();
+            $descCell = $headerTable->addCell(10000);
+            $descCell->addText(
+                $this->stripHtml($form->description),
+                ['size' => 12, 'name' => 'Cambria'],
+                ['alignment' => Jc::CENTER, 'spaceAfter' => 120]
+            );
+        }
+
+        $headerTable->addRow();
+        $metaCell = $headerTable->addCell(10000);
+        $metaCell->addText(
+            'Ringkasan Jawaban',
+            ['bold' => true, 'size' => 14, 'name' => 'Cambria'],
+            ['spaceAfter' => 60]
+        );
+        $metaCell->addText(
+            'Tanggal Export: ' . Carbon::now()->format('d M Y H:i'),
+            ['size' => 10, 'color' => '666666', 'name' => 'Cambria'],
+            ['spaceAfter' => 30]
+        );
+        $metaCell->addText(
+            'Total Jawaban: ' . $totalResponses,
+            ['size' => 10, 'color' => '666666', 'name' => 'Cambria'],
+            ['spaceAfter' => 0]
+        );
+
+        $section->addTextBreak(1);
+
+        // Question Summaries
+        if (empty($questionSummaries)) {
+            $emptyTable = $section->addTable($tableStyle);
+            $emptyTable->addRow();
+            $emptyCell = $emptyTable->addCell(10000);
+            $emptyCell->addText(
+                'Belum ada pertanyaan dalam form ini.',
+                ['size' => 11, 'italic' => true, 'color' => '999999', 'name' => 'Cambria'],
+                ['spaceAfter' => 0]
+            );
+        } else {
+            $section->addText(
+                'Ringkasan Pertanyaan',
+                ['bold' => true, 'size' => 16, 'name' => 'Cambria'],
+                ['spaceBefore' => 240, 'spaceAfter' => 120]
+            );
+
+            foreach ($questionSummaries as $index => $summary) {
+                $questionTitle = $this->stripHtml($summary['title'] ?? 'Pertanyaan');
+                if (empty(trim($questionTitle))) {
+                    $questionTitle = 'Pertanyaan ' . ($index + 1);
+                }
+
+                // Create table for each question summary
+                $questionTable = $section->addTable($tableStyle);
+
+                // Title row with background
+                $questionTable->addRow();
+                $titleCell = $questionTable->addCell(10000, $titleCellStyle);
+                $titleCell->addText(
+                    'Pertanyaan ' . ($index + 1) . ': ' . $questionTitle,
+                    ['bold' => true, 'size' => 12, 'name' => 'Cambria'],
+                    ['spaceAfter' => 0]
+                );
+
+                // Content row
+                $questionTable->addRow();
+                $contentCell = $questionTable->addCell(10000);
+
+                $totalAnswers = isset($summary['total']) ? (int)$summary['total'] : 0;
+                $contentCell->addText(
+                    'Total Jawaban: ' . $totalAnswers,
+                    ['size' => 10, 'color' => '666666', 'name' => 'Cambria'],
+                    ['spaceAfter' => 120]
+                );
+
+                if (isset($summary['chart']) && is_array($summary['chart']) && !empty($summary['chart']['labels']) && is_array($summary['chart']['labels']) && !empty($summary['chart']['values']) && is_array($summary['chart']['values'])) {
+                    $labels = $summary['chart']['labels'] ?? [];
+                    $values = $summary['chart']['values'] ?? [];
+
+                    if (empty($labels) || empty($values)) {
+                        $contentCell->addText(
+                            'Data chart tidak lengkap.',
+                            ['size' => 10, 'italic' => true, 'color' => '999999', 'name' => 'Cambria'],
+                            ['spaceAfter' => 0]
+                        );
+                    } else {
+                        $contentCell->addText(
+                            'Data Jawaban:',
+                            ['bold' => true, 'size' => 11, 'name' => 'Cambria'],
+                            ['spaceAfter' => 60]
+                        );
+
+                        // Generate chart image
+                        $chartImagePath = $this->generateChartImage($summary['chart'], $summary['id']);
+                        if ($chartImagePath && file_exists($chartImagePath)) {
+                            $tempChartFiles[] = $chartImagePath;
+                            $contentCell->addImage(
+                                $chartImagePath,
+                                [
+                                    'width' => 400,
+                                    'height' => 300,
+                                    'alignment' => Jc::CENTER,
+                                ]
+                            );
+                            $contentCell->addTextBreak(1);
+                        }
+
+                        // Also add text summary
+                        foreach ($summary['chart']['labels'] as $labelIndex => $label) {
+                            $contentCell->addText(
+                                '  - ' . $this->stripHtml($label) . ': ' . $summary['chart']['values'][$labelIndex] . ' jawaban',
+                                ['size' => 11, 'name' => 'Cambria'],
+                                ['spaceAfter' => 30]
+                            );
+                        }
+                    }
+                } elseif (isset($summary['text_answers']) && is_array($summary['text_answers']) && !empty($summary['text_answers'])) {
+                    // List text answers
+                    foreach ($summary['text_answers'] as $answer) {
+                        if (is_string($answer) || is_numeric($answer)) {
+                            $cleanAnswer = $this->stripHtml((string)$answer);
+                            if (!empty(trim($cleanAnswer))) {
+                                $contentCell->addText(
+                                    '- ' . $cleanAnswer,
+                                    ['size' => 11, 'name' => 'Cambria'],
+                                    ['spaceAfter' => 60, 'indentation' => ['left' => 360]]
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    $contentCell->addText(
+                        'Belum ada jawaban untuk pertanyaan ini.',
+                        ['size' => 10, 'italic' => true, 'color' => '999999', 'name' => 'Cambria'],
+                        ['spaceAfter' => 0]
+                    );
+                }
+
+                $section->addTextBreak(1);
+            }
+        }
+
+        // Result Settings Summary - Temporarily disabled to isolate the issue
+        /*
+        try {
+            if (isset($form->resultRules) && $form->resultRules && method_exists($form->resultRules, 'isNotEmpty') && $form->resultRules->isNotEmpty()) {
+                $section->addText(
+                    'Ringkasan Hasil',
+                    ['bold' => true, 'size' => 16],
+                    ['spaceBefore' => 360, 'spaceAfter' => 240]
+                );
+
+                foreach ($form->resultRules as $rule) {
+                    try {
+                        // Format condition text - ensure it's safe
+                        $conditionText = $this->formatResultRuleCondition($rule);
+                        $conditionText = $this->stripHtml($conditionText);
+                        if (!empty(trim($conditionText))) {
+                            $section->addText(
+                                $conditionText,
+                                ['bold' => true, 'size' => 12],
+                                ['spaceBefore' => 120, 'spaceAfter' => 60]
+                            );
+                        }
+
+                        if ($rule->texts && $rule->texts->isNotEmpty()) {
+                            foreach ($rule->texts as $text) {
+                                try {
+                                    // Process title if exists
+                                    if (isset($text->textSetting) && $text->textSetting) {
+                                        $textSetting = $text->textSetting;
+                                        if (isset($textSetting->title) && !empty($textSetting->title)) {
+                                            $cleanTitle = $this->stripHtml((string)$textSetting->title);
+                                            if (!empty(trim($cleanTitle))) {
+                                                $section->addText(
+                                                    'Judul: ' . $cleanTitle,
+                                                    ['bold' => true, 'size' => 11],
+                                                    ['spaceAfter' => 30]
+                                                );
+                                            }
+                                        }
+                                    }
+
+                                    // Process result text - use same format as Individual (no split)
+                                    if (isset($text->result_text) && !empty($text->result_text)) {
+                                        $section->addText(
+                                            $this->stripHtml($text->result_text),
+                                            ['size' => 11],
+                                            ['spaceAfter' => 60, 'indentation' => ['left' => 240]]
+                                        );
+                                    }
+                                } catch (\Exception $e) {
+                                    // Skip this text if there's an error
+                                    Log::warning('Error processing result text in Word export', [
+                                        'error' => $e->getMessage(),
+                                        'text_id' => $text->id ?? null,
+                                    ]);
+                                    continue;
+                                }
+                            }
+                        }
+
+                        $section->addTextBreak(1);
+                    } catch (\Exception $e) {
+                        // Skip this rule if there's an error
+                        Log::warning('Error processing result rule in Word export', [
+                            'error' => $e->getMessage(),
+                            'rule_id' => $rule->id ?? null,
+                        ]);
+                        continue;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            // If result rules section fails, just skip it
+            Log::warning('Error processing result rules section in Word export', [
+                'error' => $e->getMessage(),
+                'form_id' => $form->id,
+            ]);
+        }
+        */
+
+        // Generate filename
+        $filename = 'export_' . ($form->slug ?? 'form') . '_summary_' . date('Y-m-d_His') . '.docx';
+
+        // Save to temporary file
+        $tempFile = tempnam(sys_get_temp_dir(), 'phpword_');
+
+        try {
+            // Use Word2007 format (compatible with Word 2007+)
+            $writer = IOFactory::createWriter($phpWord, 'Word2007');
+
+            // Save to temporary file with explicit permissions
+            $writer->save($tempFile);
+
+            // Set file permissions to ensure it's readable
+            @chmod($tempFile, 0644);
+
+            if (!file_exists($tempFile)) {
+                throw new \Exception('File tidak berhasil dibuat');
+            }
+
+            $fileSize = filesize($tempFile);
+            if ($fileSize === false || $fileSize === 0) {
+                @unlink($tempFile);
+                throw new \Exception('File kosong atau tidak valid');
+            }
+
+            // Minimum file size for valid DOCX (should be at least a few KB)
+            if ($fileSize < 1000) {
+                @unlink($tempFile);
+                throw new \Exception('File terlalu kecil, mungkin tidak valid');
+            }
+
+            // Verify file is readable
+            if (!is_readable($tempFile)) {
+                @unlink($tempFile);
+                throw new \Exception('File tidak dapat dibaca');
+            }
+
+            // Verify it's a valid ZIP file (DOCX is a ZIP archive)
+            $zip = new \ZipArchive();
+            $zipResult = $zip->open($tempFile, \ZipArchive::CHECKCONS);
+            if ($zipResult !== true) {
+                @unlink($tempFile);
+                throw new \Exception('File bukan format DOCX yang valid (ZIP error: ' . $zipResult . ')');
+            }
+
+            // Verify essential DOCX files exist
+            $requiredFiles = ['[Content_Types].xml', 'word/document.xml'];
+            foreach ($requiredFiles as $requiredFile) {
+                if ($zip->locateName($requiredFile) === false) {
+                    $zip->close();
+                    @unlink($tempFile);
+                    throw new \Exception('File DOCX tidak lengkap: ' . $requiredFile . ' tidak ditemukan');
+                }
+            }
+
+            $zip->close();
+        } catch (\Exception $e) {
+            if (isset($tempFile) && file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+            Log::error('Failed to generate Word document', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'form_id' => $form->id,
+            ]);
+            abort(500, 'Gagal membuat dokumen Word: ' . $e->getMessage());
+        }
+
+        // Cleanup chart images after download
+        register_shutdown_function(function () use ($tempChartFiles) {
+            foreach ($tempChartFiles as $chartFile) {
+                if (file_exists($chartFile)) {
+                    @unlink($chartFile);
+                }
+            }
+        });
+
+        // Return download response with proper headers
+        return response()->download($tempFile, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Export individual responses ke Word document
+     */
+    public function exportIndividual(Form $form)
+    {
+        if ($form->user_id !== Auth::id()) {
+            abort(403);
+        }
+
+        $responseData = $this->buildResponseData($form);
+        $individualResponses = $responseData['individualResponses'];
+        $totalResponses = $responseData['totalResponses'];
+
+        // Create new Word document
+        $phpWord = new PhpWord();
+
+        // Set default font to Cambria
+        $phpWord->setDefaultFontName('Cambria');
+        $phpWord->setDefaultFontSize(11);
+
+        $section = $phpWord->addSection([
+            'marginTop' => 1440,
+            'marginRight' => 1440,
+            'marginBottom' => 1440,
+            'marginLeft' => 1440,
+        ]);
+
+        // Define table style with borders
+        $tableStyle = [
+            'borderSize' => 6,
+            'borderColor' => '000000',
+            'cellMargin' => 80,
+        ];
+
+        // Define cell style for title row
+        $titleCellStyle = [
+            'bgColor' => 'E5E5E5',
+            'valign' => 'center',
+        ];
+
+        // Header Table with border
+        $headerTable = $section->addTable($tableStyle);
+        $headerTable->addRow();
+        $headerCell = $headerTable->addCell(10000, $titleCellStyle);
+        $headerCell->addText(
+            '🩸 ' . $this->stripHtml($form->title ?? 'Form') . ' 🩸',
+            ['bold' => true, 'size' => 18, 'name' => 'Cambria'],
+            ['alignment' => Jc::CENTER, 'spaceAfter' => 120]
+        );
+
+        if ($form->description) {
+            $headerTable->addRow();
+            $descCell = $headerTable->addCell(10000);
+            $descCell->addText(
+                $this->stripHtml($form->description),
+                ['size' => 12, 'name' => 'Cambria'],
+                ['alignment' => Jc::CENTER, 'spaceAfter' => 120]
+            );
+        }
+
+        $headerTable->addRow();
+        $metaCell = $headerTable->addCell(10000);
+        $metaCell->addText(
+            'Detail Jawaban Individual',
+            ['bold' => true, 'size' => 14, 'name' => 'Cambria'],
+            ['spaceAfter' => 60]
+        );
+        $metaCell->addText(
+            'Tanggal Export: ' . Carbon::now()->format('d M Y H:i'),
+            ['size' => 10, 'color' => '666666', 'name' => 'Cambria'],
+            ['spaceAfter' => 30]
+        );
+        $metaCell->addText(
+            'Total Jawaban: ' . $totalResponses,
+            ['size' => 10, 'color' => '666666', 'name' => 'Cambria'],
+            ['spaceAfter' => 0]
+        );
+
+        $section->addTextBreak(1);
+
+        // Individual Responses
+        if (!empty($individualResponses)) {
+            foreach ($individualResponses as $index => $response) {
+                // Create table for each response
+                $responseTable = $section->addTable($tableStyle);
+
+                // Title row with background
+                $responseTable->addRow();
+                $titleCell = $responseTable->addCell(10000, $titleCellStyle);
+                $titleCell->addText(
+                    'Jawaban #' . ($index + 1),
+                    ['bold' => true, 'size' => 14, 'name' => 'Cambria'],
+                    ['spaceAfter' => 0]
+                );
+
+                // Content row
+                $responseTable->addRow();
+                $contentCell = $responseTable->addCell(10000);
+
+                $contentCell->addText(
+                    'Email: ' . ($response['email'] ?? 'Anonim'),
+                    ['size' => 11, 'name' => 'Cambria'],
+                    ['spaceAfter' => 30]
+                );
+
+                $contentCell->addText(
+                    'Tanggal Submit: ' . ($response['submitted_at'] ?? '-'),
+                    ['size' => 11, 'name' => 'Cambria'],
+                    ['spaceAfter' => 30]
+                );
+
+                if (isset($response['total_score'])) {
+                    $contentCell->addText(
+                        'Skor Total: ' . $response['total_score'],
+                        ['size' => 11, 'bold' => true, 'name' => 'Cambria'],
+                        ['spaceAfter' => 60]
+                    );
+                }
+
+                // Answers (displayed first)
+                if (!empty($response['answers'])) {
+                    $contentCell->addText(
+                        'Jawaban:',
+                        ['size' => 11, 'bold' => true, 'name' => 'Cambria'],
+                        ['spaceBefore' => 0, 'spaceAfter' => 60]
+                    );
+
+                    foreach ($response['answers'] as $answer) {
+                        $contentCell->addText(
+                            $this->stripHtml($answer['question'] ?? 'Pertanyaan'),
+                            ['size' => 11, 'bold' => true, 'name' => 'Cambria'],
+                            ['spaceAfter' => 30]
+                        );
+                        $contentCell->addText(
+                            $this->stripHtml($answer['value'] ?? '-'),
+                            ['size' => 11, 'name' => 'Cambria'],
+                            ['spaceAfter' => 60, 'indentation' => ['left' => 240]]
+                        );
+                    }
+                }
+
+                // Result text displayed at the bottom (after all answers)
+                if (!empty($response['result_text'])) {
+                    $contentCell->addText(
+                        'Hasil:',
+                        ['size' => 11, 'bold' => true, 'name' => 'Cambria'],
+                        ['spaceBefore' => 120, 'spaceAfter' => 30]
+                    );
+                    // Format result text with bullet points and proper line breaks
+                    $this->formatResultTextForWord($response['result_text'], $contentCell);
+                }
+
+                $section->addTextBreak(1);
+            }
+        }
+
+        // Generate filename
+        $filename = $this->sanitizeFilename($form->title ?? 'form') . '_individual_' . Carbon::now()->format('Y-m-d_H-i-s') . '.docx';
+
+        // Save to temporary file
+        $tempDir = sys_get_temp_dir();
+        $tempFile = $tempDir . DIRECTORY_SEPARATOR . 'export_' . uniqid() . '.docx';
+
+        try {
+            // Use Word2007 format (compatible with Word 2007+)
+            $writer = IOFactory::createWriter($phpWord, 'Word2007');
+
+            // Save to temporary file with explicit permissions
+            $writer->save($tempFile);
+
+            // Set file permissions to ensure it's readable
+            @chmod($tempFile, 0644);
+
+            if (!file_exists($tempFile)) {
+                throw new \Exception('File tidak berhasil dibuat');
+            }
+
+            $fileSize = filesize($tempFile);
+            if ($fileSize === false || $fileSize === 0) {
+                @unlink($tempFile);
+                throw new \Exception('File kosong atau tidak valid');
+            }
+
+            // Minimum file size for valid DOCX (should be at least a few KB)
+            if ($fileSize < 1000) {
+                @unlink($tempFile);
+                throw new \Exception('File terlalu kecil, mungkin tidak valid');
+            }
+
+            // Verify file is readable
+            if (!is_readable($tempFile)) {
+                @unlink($tempFile);
+                throw new \Exception('File tidak dapat dibaca');
+            }
+
+            // Verify it's a valid ZIP file (DOCX is a ZIP archive)
+            $zip = new \ZipArchive();
+            $zipResult = $zip->open($tempFile, \ZipArchive::CHECKCONS);
+            if ($zipResult !== true) {
+                @unlink($tempFile);
+                throw new \Exception('File bukan format DOCX yang valid (ZIP error: ' . $zipResult . ')');
+            }
+
+            // Verify essential DOCX files exist
+            $requiredFiles = ['[Content_Types].xml', 'word/document.xml'];
+            foreach ($requiredFiles as $requiredFile) {
+                if ($zip->locateName($requiredFile) === false) {
+                    $zip->close();
+                    @unlink($tempFile);
+                    throw new \Exception('File DOCX tidak lengkap: ' . $requiredFile . ' tidak ditemukan');
+                }
+            }
+
+            $zip->close();
+        } catch (\Exception $e) {
+            if (isset($tempFile) && file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+            Log::error('Failed to generate Word document', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'form_id' => $form->id,
+            ]);
+            abort(500, 'Gagal membuat dokumen Word: ' . $e->getMessage());
+        }
+
+        // Return download response with proper headers
+        return response()->download($tempFile, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Helper method untuk strip HTML tags
+     */
+    private function stripHtml(?string $html): string
+    {
+        if (empty($html)) {
+            return '';
+        }
+
+        // Decode HTML entities
+        $text = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        // Strip HTML tags
+        $text = strip_tags($text);
+
+        // Replace bullet points and special characters with simpler equivalents
+        $text = str_replace(['•', '·', '▪', '▫'], '-', $text);
+
+        // Replace tabs with spaces
+        $text = str_replace("\t", ' ', $text);
+
+        // Remove control characters except newlines and carriage returns (for paragraph breaks)
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
+
+        // Remove non-printable characters and zero-width characters
+        $text = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{200E}\x{200F}]/u', '', $text);
+
+        // Remove XML invalid characters (keep only valid XML 1.0 characters)
+        // XML 1.0 valid: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+        $text = preg_replace('/[^\x09\x0A\x0D\x20-\xD7FF\xE000-\xFFFD]/u', '', $text);
+
+        // Clean up whitespace but preserve newlines for paragraph breaks
+        $text = trim($text);
+
+        // Replace multiple spaces with single space, but preserve newlines
+        $text = preg_replace('/[ \t]+/', ' ', $text);
+
+        // Normalize newlines
+        $text = preg_replace('/\r\n|\r/', "\n", $text);
+
+        // Ensure valid UTF-8
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        }
+
+        return $text;
+    }
+
+    /**
+     * Helper method untuk format result text dengan bullet points dan line breaks yang rapi
+     */
+    private function formatResultTextForWord(?string $text, $cell): void
+    {
+        if (empty($text)) {
+            return;
+        }
+
+        // Decode HTML entities
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+        // Strip HTML tags but preserve structure
+        $text = strip_tags($text);
+
+        // Normalize line breaks
+        $text = preg_replace('/\r\n|\r/', "\n", $text);
+
+        // Split by newlines
+        $lines = explode("\n", $text);
+
+        foreach ($lines as $line) {
+            // Remove leading/trailing whitespace but check original for bullet detection
+            $originalLine = $line;
+            $trimmedLine = trim($line);
+
+            if (empty($trimmedLine)) {
+                continue;
+            }
+
+            // Check if line starts with bullet point (•, -, *, etc.)
+            // Pattern: optional whitespace, bullet character, optional whitespace/tab, then content
+            // Also handle cases where bullet is followed by tab
+            $bulletPattern = '/^[\s]*([•·▪▫\-\*\+]|[\d]+[\.\)])[\s\t]*(.+)$/u';
+
+            if (preg_match($bulletPattern, $originalLine, $matches)) {
+                // Line has bullet point
+                $content = trim($matches[2]);
+
+                if (!empty($content)) {
+                    // Use bullet point symbol
+                    $bulletChar = '•';
+
+                    $cell->addText(
+                        $bulletChar . ' ' . $content,
+                        ['size' => 11, 'name' => 'Cambria'],
+                        ['spaceAfter' => 60, 'indentation' => ['left' => 240, 'hanging' => 240]]
+                    );
+                }
+            } else {
+                // Regular line without bullet
+                // Check if it's a continuation (starts with space/tab) or new paragraph
+                if (preg_match('/^[\s\t]+/', $originalLine) && !empty($trimmedLine)) {
+                    // Continuation line - add with same indentation
+                    $cell->addText(
+                        $trimmedLine,
+                        ['size' => 11, 'name' => 'Cambria'],
+                        ['spaceAfter' => 60, 'indentation' => ['left' => 240]]
+                    );
+                } elseif (!empty($trimmedLine)) {
+                    // New paragraph or title (first line or line without leading whitespace)
+                    $cell->addText(
+                        $trimmedLine,
+                        ['size' => 11, 'name' => 'Cambria'],
+                        ['spaceAfter' => 60, 'indentation' => ['left' => 240]]
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * Helper method untuk format result rule condition
+     */
+    private function formatResultRuleCondition($rule): string
+    {
+        $conditionType = $rule->condition_type ?? 'range';
+
+        return match ($conditionType) {
+            'range' => sprintf(
+                'Skor %s - %s',
+                $rule->min_score !== null ? $rule->min_score : 'min',
+                $rule->max_score !== null ? $rule->max_score : 'max'
+            ),
+            'equal' => 'Skor = ' . ($rule->single_score ?? '0'),
+            'greater' => 'Skor > ' . ($rule->single_score ?? '0'),
+            'less' => 'Skor < ' . ($rule->single_score ?? '0'),
+            default => 'Kondisi tidak diketahui',
+        };
+    }
+
+    /**
+     * Helper method untuk sanitize filename
+     */
+    private function sanitizeFilename(string $filename): string
+    {
+        // Remove HTML tags
+        $filename = strip_tags($filename);
+
+        // Remove special characters
+        $filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', $filename);
+
+        // Remove multiple underscores
+        $filename = preg_replace('/_+/', '_', $filename);
+
+        // Trim underscores from start and end
+        $filename = trim($filename, '_');
+
+        // Limit length
+        if (strlen($filename) > 100) {
+            $filename = substr($filename, 0, 100);
+        }
+
+        return $filename ?: 'form';
+    }
+
+    /**
+     * Generate chart image and return temporary file path
+     */
+    private function generateChartImage(array $chartData, int $questionId): ?string
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            return null; // GD library not available
+        }
+
+        $type = $chartData['type'] ?? 'pie';
+        $labels = $chartData['labels'] ?? [];
+        $values = $chartData['values'] ?? [];
+
+        if (empty($labels) || empty($values)) {
+            return null;
+        }
+
+        $width = 600;
+        $height = 400;
+        $image = imagecreatetruecolor($width, $height);
+
+        // Colors
+        $white = imagecolorallocate($image, 255, 255, 255);
+        $black = imagecolorallocate($image, 0, 0, 0);
+        $gray = imagecolorallocate($image, 200, 200, 200);
+        $colors = [
+            imagecolorallocate($image, 248, 113, 113), // #F87171
+            imagecolorallocate($image, 251, 191, 36), // #FBBF24
+            imagecolorallocate($image, 52, 211, 153), // #34D399
+            imagecolorallocate($image, 96, 165, 250), // #60A5FA
+            imagecolorallocate($image, 167, 139, 250), // #A78BFA
+            imagecolorallocate($image, 244, 114, 182), // #F472B6
+            imagecolorallocate($image, 249, 115, 22), // #F97316
+            imagecolorallocate($image, 45, 212, 191), // #2DD4BF
+        ];
+
+        // Fill background
+        imagefilledrectangle($image, 0, 0, $width, $height, $white);
+
+        if ($type === 'pie') {
+            $this->drawPieChart($image, $labels, $values, $colors, $black, $width, $height);
+        } else {
+            $this->drawBarChart($image, $labels, $values, $colors, $black, $gray, $width, $height);
+        }
+
+        // Save to temporary file as PNG
+        $tempFile = sys_get_temp_dir() . '/chart_' . $questionId . '_' . time() . '.png';
+        imagepng($image, $tempFile);
+        // imagedestroy() is deprecated in PHP 8.0+ - resources are automatically destroyed
+
+        return $tempFile;
+    }
+
+    private function drawPieChart($image, array $labels, array $values, array $colors, $textColor, int $width, int $height): void
+    {
+        $centerX = $width / 2;
+        $centerY = $height / 2;
+        $radius = min($width, $height) / 3;
+        $startAngle = 0;
+
+        $total = array_sum($values);
+        if ($total == 0) return;
+
+        $labelY = 50;
+        $legendX = 50;
+        $legendSpacing = 25;
+
+        foreach ($values as $index => $value) {
+            if ($value == 0) continue;
+
+            $percentage = ($value / $total) * 100;
+            $angle = ($value / $total) * 360;
+
+            $color = $colors[$index % count($colors)];
+
+            // Draw pie slice
+            imagefilledarc(
+                $image,
+                $centerX,
+                $centerY,
+                $radius * 2,
+                $radius * 2,
+                $startAngle,
+                $startAngle + $angle,
+                $color,
+                IMG_ARC_PIE
+            );
+
+            // Draw legend
+            $label = strip_tags($labels[$index] ?? 'Label ' . ($index + 1));
+            if (strlen($label) > 30) {
+                $label = substr($label, 0, 27) . '...';
+            }
+            $legendText = $label . ' (' . $value . ')';
+
+            // Color box
+            imagefilledrectangle($image, $legendX, $labelY - 10, $legendX + 15, $labelY + 5, $color);
+            imagerectangle($image, $legendX, $labelY - 10, $legendX + 15, $labelY + 5, $textColor);
+
+            // Text
+            imagestring($image, 3, $legendX + 20, $labelY - 8, $legendText, $textColor);
+            $labelY += $legendSpacing;
+
+            $startAngle += $angle;
+        }
+    }
+
+    private function drawBarChart($image, array $labels, array $values, array $colors, $textColor, $gridColor, int $width, int $height): void
+    {
+        $margin = 60;
+        $chartWidth = $width - ($margin * 2);
+        $chartHeight = $height - ($margin * 2);
+        $barWidth = $chartWidth / max(count($values), 1);
+        $maxValue = max($values) ?: 1;
+
+        // Draw grid lines
+        $gridLines = 5;
+        for ($i = 0; $i <= $gridLines; $i++) {
+            $y = $margin + ($chartHeight / $gridLines) * $i;
+            imageline($image, $margin, $y, $width - $margin, $y, $gridColor);
+            $value = $maxValue - (($maxValue / $gridLines) * $i);
+            imagestring($image, 2, 10, $y - 7, (int)$value, $textColor);
+        }
+
+        // Draw bars
+        foreach ($values as $index => $value) {
+            $barHeight = ($value / $maxValue) * $chartHeight;
+            $x = $margin + ($barWidth * $index) + ($barWidth * 0.1);
+            $barActualWidth = $barWidth * 0.8;
+            $y = $margin + $chartHeight - $barHeight;
+
+            $color = $colors[$index % count($colors)];
+            imagefilledrectangle($image, $x, $y, $x + $barActualWidth, $margin + $chartHeight, $color);
+            imagerectangle($image, $x, $y, $x + $barActualWidth, $margin + $chartHeight, $textColor);
+
+            // Value label on top of bar
+            imagestring($image, 3, $x + ($barActualWidth / 2) - 10, $y - 20, (string)$value, $textColor);
+
+            // Label below bar
+            $label = strip_tags($labels[$index] ?? 'Label ' . ($index + 1));
+            if (strlen($label) > 15) {
+                $label = substr($label, 0, 12) . '...';
+            }
+            $labelX = $x + ($barActualWidth / 2) - (strlen($label) * 3);
+            imagestring($image, 2, $labelX, $margin + $chartHeight + 5, $label, $textColor);
         }
     }
 }
