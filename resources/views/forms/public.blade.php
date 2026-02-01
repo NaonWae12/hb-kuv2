@@ -198,7 +198,63 @@ $formDescriptionStyleAttr = $formDescriptionStyleValue ? ' style="' . htmlspecia
         $textAlignment = $resultData['text_alignment'] ?? 'center';
         $imageAlignment = $resultData['image_alignment'] ?? 'center';
         $texts = $resultData['texts'] ?? [];
+        $sectionScores = $resultData['section_scores'] ?? [];
+        $derivedMetrics = $resultData['derived_metrics'] ?? [];
+        @endphp
 
+        {{-- Metrics Breakdown Card --}}
+        @if(!empty($sectionScores) || !empty($derivedMetrics))
+        <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-6">Analisis Hasil</h2>
+
+            @if(!empty($derivedMetrics))
+            <div class="mb-8">
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Metrik Kesehatan</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    @foreach($derivedMetrics as $key => $metric)
+                    <div class="bg-red-50 rounded-xl p-4 border border-red-100">
+                        <p class="text-xs text-red-600 font-medium mb-1">{{ $metric['label'] }}</p>
+                        <div class="flex items-end space-x-2">
+                            <span class="text-2xl font-bold text-red-700">{{ $metric['value'] }}</span>
+                            @if($key === 'bmi')
+                            <span class="text-sm text-red-500 pb-1">kg/m²</span>
+                            @endif
+                        </div>
+                        @if($key === 'bmi' && isset($metric['weight']) && isset($metric['height']))
+                        <p class="text-[10px] text-red-400 mt-2">Berdasarkan BB: {{ $metric['weight'] }}kg, TB: {{ $metric['height'] }}cm</p>
+                        @endif
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+
+            @if(!empty($sectionScores))
+            <div>
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Rincian Skor per Bagian</p>
+                <div class="space-y-4">
+                    @foreach($sectionScores as $sId => $sData)
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-gray-700">{{ strip_tags($sData['title']) }}</span>
+                            <span class="text-sm font-bold text-red-600">{{ $sData['score'] }}</span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-2">
+                            @php
+                            // For visualization, assume a max score per section or just show relative to a fixed value
+                            // Since we don't have max section score easily here, we'll just show it filled.
+                            // In a real scenario, we might want to know the max possible score.
+                            @endphp
+                            <div class="bg-red-500 h-2 rounded-full" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+        </div>
+        @endif
+        @php
         $textAlignClass = match($textAlignment) {
         'left' => 'text-left',
         'right' => 'text-right',
@@ -351,6 +407,18 @@ $formDescriptionStyleAttr = $formDescriptionStyleValue ? ' style="' . htmlspecia
         @if (!session('result_data') && !session('status'))
         <form method="POST" action="{{ route('forms.public.submit', $form) }}" id="public-form" class="space-y-6">
             @csrf
+            
+            @if($form->show_progress_bar && count($pages) > 1)
+            <div class="mb-6">
+                <div class="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Progress Pengisian</span>
+                    <span id="progress-text">Halaman 1 dari {{ count($pages) }}</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="progress-bar" class="bg-red-600 h-2 rounded-full transition-all duration-300" style="width: {{ 100 / count($pages) }}%"></div>
+                </div>
+            </div>
+            @endif
 
             @if($form->collect_email)
             <div class="bg-white rounded-2xl shadow border border-gray-100 p-6">
@@ -632,6 +700,15 @@ $formDescriptionStyleAttr = $formDescriptionStyleValue ? ' style="' . htmlspecia
                     nextBtn.classList.add('inline-flex');
                     submitBtn.classList.add('hidden');
                     submitBtn.classList.remove('inline-flex');
+                }
+
+                // Update progress bar
+                const progressBar = document.getElementById('progress-bar');
+                const progressText = document.getElementById('progress-text');
+                if (progressBar && progressText) {
+                    const progress = Math.round(((currentPage + 1) / totalPages) * 100);
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `Halaman ${currentPage + 1} dari ${totalPages}`;
                 }
             }
 

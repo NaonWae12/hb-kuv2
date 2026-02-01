@@ -1,0 +1,118 @@
+﻿#!/bin/bash
+# Script ini bisa dijalankan langsung via SSH dengan satu command
+
+set -e
+
+PROJECT_DIR=\"/var/www/hb-ku\"
+REPO_URL=\"https://github.com/NaonWae12/Hb-ku.git\"
+BRANCH=\"on-progress\"
+DB_NAME=\"hb_ku-v2\"
+
+echo \"=========================================\"
+echo \"Deployment Hb-ku Project ke VPS\"
+echo \"=========================================\"
+
+# Install PHP extensions
+echo \"Installing PHP extensions...\"
+apt install -y php-gd php-imagick
+
+# Install Node.js
+if ! command -v node &> /dev/null; then
+    echo \"Installing Node.js...\"
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+fi
+
+# Masuk ke direktori
+cd \$PROJECT_DIR
+
+# Clone/Pull project
+if [ -d \".git\" ]; then
+    echo \"Pulling latest changes...\"
+    git fetch origin
+    git checkout \$BRANCH
+    git pull origin \$BRANCH
+else
+    echo \"Cloning project...\"
+    if [ -d \"backend\" ]; then rm -rf backend; fi
+    git clone -b \$BRANCH \$REPO_URL .
+fi
+
+# Install dependencies
+echo \"Installing PHP dependencies...\"
+composer install --no-dev --optimize-autoloader
+
+# Setup .env
+if [ ! -f \".env\" ]; then
+    cp .env.example .env
+fi
+
+sed -i 's/APP_ENV=.*/APP_ENV=production/' .env
+sed -i 's/APP_DEBUG=.*/APP_DEBUG=false/' .env
+sed -i 's|APP_URL=.*|APP_URL=http://202.10.47.245|' .env
+sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env
+sed -i 's/DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+sed -i 's/DB_PORT=.*/DB_PORT=3306/' .env
+sed -i \"s/DB_DATABASE=.*/DB_DATABASE=\$DB_NAME/\" .env
+sed -i 's/DB_USERNAME=.*/DB_USERNAME=root/' .env
+
+# Generate key
+php artisan key:generate --force
+
+# Permissions
+chown -R www-data:www-data \$PROJECT_DIR
+chmod -R 755 \$PROJECT_DIR
+chmod -R 775 storage bootstrap/cache public
+
+# Build assets
+echo \"Building assets...\"
+npm install
+npm run build
+
+# Cache
+php artisan config:clear
+php artisan cache:clear
+php artisan view:clear
+php artisan route:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Nginx config
+cat > /etc/nginx/sites-available/hb-ku << 'NGINXEOF'
+server {
+    listen 80;
+    server_name 202.10.47.245;
+    root /var/www/hb-ku/public;
+    index index.php index.html;
+    add_header X-Frame-Options \"SAMEORIGIN\";
+    add_header X-Content-Type-Options \"nosniff\";
+    charset utf-8;
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+    error_page 404 /index.php;
+    location ~ \.php\$ {
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        include fastcgi_params;
+    }
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
+NGINXEOF
+
+nginx -t
+systemctl restart php8.3-fpm
+systemctl reload nginx
+
+# Migrate (try, mungkin perlu password)
+php artisan config:clear
+php artisan config:cache
+php artisan migrate --force || echo \"Migration gagal, mungkin perlu set DB_PASSWORD di .env\"
+
+echo \"Deployment selesai! Akses: http://202.10.47.245\"
+

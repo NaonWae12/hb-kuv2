@@ -19,8 +19,6 @@ class Form extends Model
         'show_progress_bar',
         'shuffle_questions',
         'is_active',
-        'use_bmi_formula',
-        'bmi_mapping',
     ];
 
     protected $casts = [
@@ -29,8 +27,6 @@ class Form extends Model
         'show_progress_bar' => 'boolean',
         'shuffle_questions' => 'boolean',
         'is_active' => 'boolean',
-        'use_bmi_formula' => 'boolean',
-        'bmi_mapping' => 'array',
     ];
 
     // Relationships

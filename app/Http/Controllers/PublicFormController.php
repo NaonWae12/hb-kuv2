@@ -50,6 +50,17 @@ class PublicFormController extends Controller
             },
         ]);
 
+        // Check for existing response if limit_one_response is active
+        if ($form->limit_one_response) {
+            $existingResponse = FormResponse::where('form_id', $form->id)
+                ->where('ip_address', request()->ip())
+                ->first();
+
+            if ($existingResponse) {
+                return view('forms.already_responded', ['form' => $form]);
+            }
+        }
+
         // Group questions into pages based on sections as dividers
         $pages = $this->groupQuestionsIntoPages($form);
 
@@ -245,6 +256,15 @@ class PublicFormController extends Controller
             ];
         }
 
+        // Final shuffle pass if enabled
+        if ($form->shuffle_questions) {
+            foreach ($pages as &$page) {
+                if (count($page['questions']) > 1) {
+                    shuffle($page['questions']);
+                }
+            }
+        }
+
         return $pages;
     }
 
@@ -284,23 +304,37 @@ class PublicFormController extends Controller
 
         $validated = $request->validate($rules, $messages);
 
-        if ($form->limit_one_response && $form->collect_email && $validated['email']) {
-            $exists = FormResponse::where('form_id', $form->id)
-                ->where('email', $validated['email'])
+        if ($form->limit_one_response) {
+            // Check by IP
+            $existsIp = FormResponse::where('form_id', $form->id)
+                ->where('ip_address', $request->ip())
                 ->exists();
 
-            if ($exists) {
-                return back()
-                    ->withInput()
-                    ->withErrors(['email' => 'Anda sudah mengisi formulir ini.']);
+            if ($existsIp) {
+                return back()->with('error', 'Anda sudah mengisi formulir ini (IP terdeteksi).');
+            }
+
+            // Check by Email if collected
+            if ($form->collect_email && isset($validated['email'])) {
+                $existsEmail = FormResponse::where('form_id', $form->id)
+                    ->where('email', $validated['email'])
+                    ->exists();
+
+                if ($existsEmail) {
+                    return back()
+                        ->withInput()
+                        ->withErrors(['email' => 'Anda sudah mengisi formulir ini.']);
+                }
             }
         }
 
         $answers = $validated['answers'] ?? [];
         $totalScore = 0;
+        $sectionScores = [];
+        $derivedMetrics = [];
         $finalResultData = null;
 
-        DB::transaction(function () use ($form, $validated, $answers, &$totalScore, &$finalResultData, $request, $allQuestions, $answerTemplateScoreMap) {
+        DB::transaction(function () use ($form, $validated, $answers, &$totalScore, &$sectionScores, &$derivedMetrics, &$finalResultData, $request, $allQuestions, $answerTemplateScoreMap) {
             $formResponse = FormResponse::create([
                 'form_id' => $form->id,
                 'email' => $validated['email'] ?? null,
@@ -309,6 +343,20 @@ class PublicFormController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
 
+            // Track question-to-section mapping
+            $questionSectionMap = [];
+            foreach ($form->sections as $section) {
+                $sectionScores[$section->id] = [
+                    'title' => $section->title,
+                    'score' => 0,
+                    'calculate_subtotal' => $section->calculate_subtotal,
+                    'include_in_total' => $section->include_in_total,
+                ];
+                foreach ($section->questions as $q) {
+                    $questionSectionMap[$q->id] = $section->id;
+                }
+            }
+
             foreach ($allQuestions as $question) {
                 $answerValue = $answers[$question->id] ?? null;
 
@@ -316,71 +364,47 @@ class PublicFormController extends Controller
                     continue;
                 }
 
+                $sectionId = $questionSectionMap[$question->id] ?? null;
                 $options = $question->options->keyBy('id');
+                $questionScore = 0;
 
                 if ($question->type === 'checkbox') {
                     $selectedOptions = is_array($answerValue) ? $answerValue : [$answerValue];
                     foreach ($selectedOptions as $optionId) {
                         $option = $options->get((int) $optionId);
-                        if (! $option) {
-                            continue;
-                        }
+                        if (! $option) continue;
 
                         $score = optional($option->answerTemplate)->score;
-                        $scoreSource = $score !== null ? 'template' : null;
                         if ($score === null) {
                             $score = $this->resolveOptionScoreFallback($option->text, $answerTemplateScoreMap);
-                            $scoreSource = $score !== null ? 'fallback' : null;
                         }
-                        $score = $score ?? 0;
-                        $totalScore += $score;
-                        Log::info('Scoring checkbox answer', [
-                            'form_id' => $form->id,
-                            'question_id' => $question->id,
-                            'option_id' => $option->id,
-                            'score_added' => $score,
-                            'running_total' => $totalScore,
-                            'score_source' => $scoreSource ?? 'default_zero',
-                        ]);
+                        $questionScore += ($score ?? 0);
 
                         ResponseAnswer::create([
                             'form_response_id' => $formResponse->id,
                             'question_id' => $question->id,
                             'question_option_id' => $option->id,
                             'answer_text' => $option->text,
-                            'score' => $score,
+                            'score' => $score ?? 0,
                         ]);
                     }
                 } elseif (in_array($question->type, ['multiple-choice', 'dropdown'], true)) {
                     $option = $options->get((int) $answerValue);
-                    if (! $option) {
-                        continue;
-                    }
+                    if ($option) {
+                        $score = optional($option->answerTemplate)->score;
+                        if ($score === null) {
+                            $score = $this->resolveOptionScoreFallback($option->text, $answerTemplateScoreMap);
+                        }
+                        $questionScore = ($score ?? 0);
 
-                    $score = optional($option->answerTemplate)->score;
-                    $scoreSource = $score !== null ? 'template' : null;
-                    if ($score === null) {
-                        $score = $this->resolveOptionScoreFallback($option->text, $answerTemplateScoreMap);
-                        $scoreSource = $score !== null ? 'fallback' : null;
+                        ResponseAnswer::create([
+                            'form_response_id' => $formResponse->id,
+                            'question_id' => $question->id,
+                            'question_option_id' => $option->id,
+                            'answer_text' => $option->text,
+                            'score' => $questionScore,
+                        ]);
                     }
-                    $score = $score ?? 0;
-                    $totalScore += $score;
-                    Log::info('Scoring single choice answer', [
-                        'form_id' => $form->id,
-                        'question_id' => $question->id,
-                        'option_id' => $option->id,
-                        'score_added' => $score,
-                        'running_total' => $totalScore,
-                        'score_source' => $scoreSource ?? 'default_zero',
-                    ]);
-
-                    ResponseAnswer::create([
-                        'form_response_id' => $formResponse->id,
-                        'question_id' => $question->id,
-                        'question_option_id' => $option->id,
-                        'answer_text' => $option->text,
-                        'score' => $score,
-                    ]);
                 } else {
                     $textAnswer = is_array($answerValue) ? implode(', ', $answerValue) : $answerValue;
                     ResponseAnswer::create([
@@ -390,17 +414,43 @@ class PublicFormController extends Controller
                         'score' => 0,
                     ]);
                 }
+
+                // Update section score and total score
+                if ($sectionId && isset($sectionScores[$sectionId])) {
+                    $sectionScores[$sectionId]['score'] += $questionScore;
+                }
+            }
+
+            // Finalize total score based on section settings
+            foreach ($sectionScores as $sId => $sData) {
+                if ($sData['include_in_total']) {
+                    $totalScore += $sData['score'];
+                }
+            }
+
+            // Handle BMI Formula
+            if ($form->use_bmi_formula && !empty($form->bmi_mapping)) {
+                $weightQuestionId = $form->bmi_mapping['weight_question_id'] ?? null;
+                $heightQuestionId = $form->bmi_mapping['height_question_id'] ?? null;
+
+                $weight = $weightQuestionId ? ($answers[$weightQuestionId] ?? null) : null;
+                $height = $heightQuestionId ? ($answers[$heightQuestionId] ?? null) : null;
+
+                if (is_numeric($weight) && is_numeric($height) && $height > 0) {
+                    $heightInMeters = $height / 100;
+                    $bmi = $weight / ($heightInMeters * $heightInMeters);
+                    $derivedMetrics['bmi'] = [
+                        'label' => 'Indeks Massa Tubuh (IMT)',
+                        'value' => round($bmi, 2),
+                        'weight' => $weight,
+                        'height' => $height,
+                    ];
+                }
             }
 
             $resultData = $this->resolveResultText($form, $totalScore);
-            Log::info('Resolved result data for respondent', [
-                'form_id' => $form->id,
-                'total_score' => $totalScore,
-                'result_data' => $resultData,
-            ]);
             $finalResultData = $resultData;
 
-            // Store plain text for backward compatibility
             $resultTextPlain = null;
             if ($resultData && isset($resultData['texts'])) {
                 $resultTextPlain = implode("\n\n", array_column($resultData['texts'], 'result_text'));
@@ -409,6 +459,8 @@ class PublicFormController extends Controller
             $formResponse->update([
                 'total_score' => $totalScore,
                 'result_text' => $resultTextPlain,
+                'section_scores' => $sectionScores,
+                'derived_metrics' => $derivedMetrics,
             ]);
         });
 

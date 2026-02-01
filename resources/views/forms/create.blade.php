@@ -11,13 +11,13 @@ $responsesStats = $responsesStats ?? [
 ];
 @endphp
 <div class="min-h-screen bg-rose-50" id="form-builder-root"
-    data-initial="{!! e(json_encode($formData ? array_merge($formData, ['rule_groups' => $formData['rule_groups'] ?? []]) : ['rule_groups' => []])) !!}"
+    data-initial='{!! htmlspecialchars(json_encode($formData ? array_merge($formData, [' rule_groups'=> $formData['rule_groups'] ?? []]) : ['rule_groups' => []]), ENT_QUOTES, 'UTF-8', false) !!}'
     data-mode="{{ $formMode ?? 'create' }}"
     data-form-id="{{ $formId }}"
     data-share-url="{{ $shareUrl ?? '' }}"
     data-responses-url="{{ $formId ? route('forms.responses.data', $formId) : '' }}"
     data-total-responses="{{ $responsesStats['total_responses'] }}"
-    data-saved-rules="{!! e(json_encode($savedRules ?? [])) !!}">
+    data-saved-rules='{!! htmlspecialchars(json_encode($savedRules ?? []), ENT_QUOTES, 'UTF-8', false) !!}'>
     <!-- Top Bar dengan tombol -->
     <div class="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -34,7 +34,7 @@ $responsesStats = $responsesStats ?? [
                 <div class="flex items-center space-x-3">
                     <!-- Header Setup Button (only visible in questions tab) -->
                     <button id="header-setup-btn" type="button"
-                        class="header-setup-btn flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors hidden">
+                        class="header-setup-btn items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors hidden">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
@@ -78,12 +78,12 @@ $responsesStats = $responsesStats ?? [
                         Setelan
                     </button>
                 </div>
-                
+
                 <!-- Card Formatting Toolbar (appears when card is active) -->
                 <div id="card-formatting-toolbar" class="flex items-center space-x-1 opacity-0 pointer-events-none transition-opacity duration-200 bg-gray-50 rounded-lg px-2 py-1">
                     <!-- Separator -->
                     <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                    
+
                     <!-- Text Alignment -->
                     <div class="relative group">
                         <button class="card-toolbar-btn p-2 text-gray-700 hover:text-red-600 hover:bg-white rounded transition-colors" title="Perataan Teks" data-tool="text-align">
@@ -118,10 +118,10 @@ $responsesStats = $responsesStats ?? [
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Separator -->
                     <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                    
+
                     <!-- Font Family -->
                     <div class="relative group">
                         <button class="card-toolbar-btn px-3 py-2 text-gray-700 hover:text-red-600 hover:bg-white rounded transition-colors text-sm font-medium" title="Font" data-tool="font-family">
@@ -137,10 +137,10 @@ $responsesStats = $responsesStats ?? [
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Separator -->
                     <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                    
+
                     <!-- Font Size (Manual Input + Template) -->
                     <div class="flex items-center space-x-1">
                         <button class="card-toolbar-btn p-2 text-gray-700 hover:text-red-600 hover:bg-white rounded transition-colors" title="Kurangi Ukuran" data-action="decrease-size">
@@ -191,28 +191,28 @@ $responsesStats = $responsesStats ?? [
                             </svg>
                         </button>
                     </div>
-                    
+
                     <!-- Separator -->
                     <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                    
+
                     <!-- Text Decoration: Bold -->
                     <button class="card-toolbar-btn p-2 text-gray-700 hover:text-red-600 hover:bg-white rounded transition-colors" title="Tebal (Bold)" data-action="bold">
                         <span class="font-bold text-base">B</span>
                     </button>
-                    
+
                     <!-- Text Decoration: Italic -->
                     <button class="card-toolbar-btn p-2 text-gray-700 hover:text-red-600 hover:bg-white rounded transition-colors" title="Miring (Italic)" data-action="italic">
                         <span class="italic text-base">I</span>
                     </button>
-                    
+
                     <!-- Text Decoration: Underline -->
                     <button class="card-toolbar-btn p-2 text-gray-700 hover:text-red-600 hover:bg-white rounded transition-colors" title="Garis Bawah (Underline)" data-action="underline">
                         <span class="underline text-base">U</span>
                     </button>
-                    
+
                     <!-- Separator -->
                     <div class="w-px h-6 bg-gray-300 mx-1"></div>
-                    
+
                     <!-- Reset Button -->
                     <button class="card-toolbar-btn p-2 text-gray-700 hover:text-red-600 hover:bg-white rounded transition-colors" title="Reset ke Default" data-action="reset-formatting">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,8 +237,7 @@ $responsesStats = $responsesStats ?? [
                             data-placeholder="Judul formulir tanpa judul"
                             class="w-full text-2xl font-normal text-gray-900 border-none outline-none focus:ring-0 pb-2 border-b-2 border-transparent focus:border-red-600 transition-colors empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
                             id="form-title"
-                            style="min-height: 1.5em;"
-                        ></div>
+                            style="min-height: 1.5em;"></div>
                     </div>
 
                     <!-- Description Input -->
@@ -248,8 +247,7 @@ $responsesStats = $responsesStats ?? [
                             data-placeholder="Deskripsi formulir"
                             class="w-full text-sm text-gray-600 border-none outline-none focus:ring-0 pb-2 border-b-2 border-transparent focus:border-red-600 transition-colors empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
                             id="form-description"
-                            style="min-height: 1.5em;"
-                        ></div>
+                            style="min-height: 1.5em;"></div>
                     </div>
                 </div>
             </div>
@@ -320,24 +318,35 @@ $responsesStats = $responsesStats ?? [
                                 Individual
                             </button>
                         </div>
-                        @if($formId)
-                        <div class="flex items-center space-x-2">
-                            <a href="{{ route('forms.export', ['form' => $formId, 'type' => 'summary']) }}" 
-                               id="builder-export-summary" 
-                               class="text-sm font-medium text-red-600 hover:text-red-700 flex items-center space-x-2">
+                        @if($formId && $responsesStats['total_responses'] > 0)
+                        <div class="flex items-center gap-2">
+                            <a href="{{ route('forms.responses.export.summary', $formId) }}" id="builder-export-summary-btn" class="inline-flex items-center space-x-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                                 </svg>
                                 <span>Export Summary</span>
                             </a>
-                            <a href="{{ route('forms.export', ['form' => $formId, 'type' => 'individual']) }}" 
-                               id="builder-export-individual" 
-                               class="text-sm font-medium text-red-600 hover:text-red-700 flex items-center space-x-2 hidden">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <span>Export Individual</span>
-                            </a>
+                            <div id="builder-export-individual-group" class="relative hidden">
+                                <button type="button" id="builder-export-individual-dropdown-btn" class="inline-flex items-center space-x-2 px-4 py-2 text-sm font-medium text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <span>Export Jawaban</span>
+                                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                <div id="builder-export-individual-menu" class="hidden absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-[60]">
+                                    <a href="{{ route('forms.responses.export.individual', $formId) }}" class="block px-4 py-3 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors border-b border-gray-100">
+                                        <p class="font-semibold">Semua Jawaban</p>
+                                        <p class="text-xs text-gray-500">Export semua data dalam satu file</p>
+                                    </a>
+                                    <a href="#" id="builder-export-current-btn" class="block px-4 py-3 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition-colors">
+                                        <p class="font-semibold">Jawaban Saat Ini</p>
+                                        <p class="text-xs text-gray-500">Hanya export data yang sedang dilihat</p>
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                         @endif
                     </div>
@@ -366,6 +375,25 @@ $responsesStats = $responsesStats ?? [
                             <div id="builder-individual-loading" class="hidden">
                                 <div class="border border-gray-100 rounded-xl p-6 text-sm text-gray-500 bg-gray-50">Memuat jawaban individu...</div>
                             </div>
+
+                            <!-- Individual Toolbar -->
+                            <div id="builder-individual-toolbar" class="hidden mb-6 flex items-center justify-between">
+                                <div class="flex items-center bg-gray-100 p-1 rounded-lg">
+                                    <button id="view-mode-detail" class="px-4 py-1.5 text-xs font-semibold rounded-md transition-all bg-white text-red-600 shadow-sm">
+                                        Detail
+                                    </button>
+                                    <button id="view-mode-list" class="px-4 py-1.5 text-xs font-semibold rounded-md transition-all text-gray-500 hover:text-gray-700">
+                                        List
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- List View Container -->
+                            <div id="builder-individual-list" class="hidden space-y-3">
+                                <!-- List items will be rendered here -->
+                            </div>
+
+                            <!-- Detail View Container -->
                             <div id="builder-individual-content" class="space-y-6 hidden">
                                 <div class="flex items-center justify-between border border-gray-100 rounded-xl p-5">
                                     <div>
@@ -407,11 +435,9 @@ $responsesStats = $responsesStats ?? [
                                 <label class="text-sm font-medium text-gray-900">Kumpulkan alamat email</label>
                                 <p class="text-xs text-gray-500 mt-1">Mengumpulkan alamat email responden</p>
                             </div>
-                            <label class="relative inline-block w-11 h-6">
-                                <input type="checkbox" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-500 rounded-full transition-colors duration-200 ease-in-out peer-checked:bg-red-600">
-                                    <div class="absolute top-[2px] left-[2px] bg-white rounded-full h-5 w-5 transition-transform duration-200 ease-in-out peer-checked:translate-x-5 shadow-sm"></div>
-                                </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="collect_email" class="sr-only peer" {{ ($formData['collect_email'] ?? false) ? 'checked' : '' }}>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
                         </div>
 
@@ -421,11 +447,9 @@ $responsesStats = $responsesStats ?? [
                                 <label class="text-sm font-medium text-gray-900">Batasi ke 1 respons</label>
                                 <p class="text-xs text-gray-500 mt-1">Membatasi setiap responden hanya bisa mengisi sekali</p>
                             </div>
-                            <label class="relative inline-block w-11 h-6">
-                                <input type="checkbox" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-500 rounded-full transition-colors duration-200 ease-in-out peer-checked:bg-red-600">
-                                    <div class="absolute top-[2px] left-[2px] bg-white rounded-full h-5 w-5 transition-transform duration-200 ease-in-out peer-checked:translate-x-5 shadow-sm"></div>
-                                </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="limit_one_response" class="sr-only peer" {{ ($formData['limit_one_response'] ?? false) ? 'checked' : '' }}>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
                         </div>
 
@@ -435,11 +459,9 @@ $responsesStats = $responsesStats ?? [
                                 <label class="text-sm font-medium text-gray-900">Tampilkan progress bar</label>
                                 <p class="text-xs text-gray-500 mt-1">Menampilkan progress bar di bagian atas form</p>
                             </div>
-                            <label class="relative inline-block w-11 h-6">
-                                <input type="checkbox" class="sr-only peer" checked>
-                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-500 rounded-full transition-colors duration-200 ease-in-out peer-checked:bg-red-600">
-                                    <div class="absolute top-[2px] left-[2px] bg-white rounded-full h-5 w-5 transition-transform duration-200 ease-in-out peer-checked:translate-x-5 shadow-sm"></div>
-                                </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="show_progress_bar" class="sr-only peer" {{ ($formData['show_progress_bar'] ?? true) ? 'checked' : '' }}>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
                         </div>
 
@@ -449,12 +471,25 @@ $responsesStats = $responsesStats ?? [
                                 <label class="text-sm font-medium text-gray-900">Acak urutan pertanyaan</label>
                                 <p class="text-xs text-gray-500 mt-1">Menampilkan pertanyaan dalam urutan acak</p>
                             </div>
-                            <label class="relative inline-block w-11 h-6">
-                                <input type="checkbox" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-500 rounded-full transition-colors duration-200 ease-in-out peer-checked:bg-red-600">
-                                    <div class="absolute top-[2px] left-[2px] bg-white rounded-full h-5 w-5 transition-transform duration-200 ease-in-out peer-checked:translate-x-5 shadow-sm"></div>
-                                </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="shuffle-questions" name="shuffle_questions" class="sr-only peer" {{ ($formData['shuffle_questions'] ?? false) ? 'checked' : '' }}>
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
+                        </div>
+
+                        <!-- BMI Formula Toggle -->
+                        <div class="pt-4 border-t border-gray-100">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-900">Gunakan Rumus IMT (BMI)</label>
+                                    <p class="text-xs text-gray-500 mt-1">Hitung Indeks Massa Tubuh otomatis dari jawaban responden</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="use-bmi-formula" class="sr-only peer" {{ ($formData['use_bmi_formula'] ?? false) ? 'checked' : '' }}>
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                                </label>
+                            </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -528,23 +563,6 @@ $responsesStats = $responsesStats ?? [
                     </div>
                 </div>
 
-                <!-- Customization -->
-                <div class="border-t border-gray-200 pt-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Kustomisasi</h3>
-
-                    <div class="space-y-4">
-                        <!-- Form Color -->
-                        <div>
-                            <label class="text-sm font-medium text-gray-900 mb-2 block">Warna Tema</label>
-                            <div class="flex items-center space-x-3">
-                                <button type="button" data-theme-color="red" class="w-10 h-10 bg-red-600 rounded-lg border-2 border-red-600 shadow-sm" title="Merah"></button>
-                                <button type="button" data-theme-color="blue" class="w-10 h-10 bg-blue-600 rounded-lg border-2 border-transparent hover:border-gray-300" title="Biru"></button>
-                                <button type="button" data-theme-color="green" class="w-10 h-10 bg-green-600 rounded-lg border-2 border-transparent hover:border-gray-300" title="Hijau"></button>
-                                <button type="button" data-theme-color="purple" class="w-10 h-10 bg-purple-600 rounded-lg border-2 border-transparent hover:border-gray-300" title="Ungu"></button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -601,158 +619,157 @@ $responsesStats = $responsesStats ?? [
     </div>
 </div>
 
-    <!-- Header Setup Modal -->
-    <div id="header-setup-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50 px-4">
-        <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div class="p-6">
-                <!-- Modal Header -->
-                <div class="flex items-center justify-between mb-6">
-                    <h3 class="text-xl font-semibold text-gray-900">Setup Header</h3>
-                    <button type="button" id="header-setup-close" class="text-gray-400 hover:text-gray-600">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                </div>
+<!-- Header Setup Modal -->
+<div id="header-setup-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50 px-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-semibold text-gray-900">Setup Header</h3>
+                <button type="button" id="header-setup-close" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
 
-                <!-- Preview Header -->
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Preview</label>
-                    <div id="header-preview" class="w-full h-48 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 overflow-hidden relative" style="background-size: cover; background-position: center; background-repeat: no-repeat;">
-                        <div class="absolute inset-0 flex items-center justify-center text-gray-400">
-                            <div class="text-center">
-                                <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                </svg>
-                                <p class="text-sm">Preview Header</p>
-                            </div>
+            <!-- Preview Header -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Preview</label>
+                <div id="header-preview" class="w-full h-48 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 overflow-hidden relative" style="background-size: cover; background-position: center; background-repeat: no-repeat;">
+                    <div class="absolute inset-0 flex items-center justify-center text-gray-400">
+                        <div class="text-center">
+                            <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            <p class="text-sm">Preview Header</p>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Image Source Selection -->
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-3">Pilih Sumber Gambar</label>
-                    <div class="flex space-x-4">
-                        <button type="button" id="header-template-btn" class="header-source-btn flex-1 px-4 py-3 border-2 border-red-600 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-colors">
-                            Template
-                        </button>
-                        <button type="button" id="header-upload-btn" class="header-source-btn flex-1 px-4 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors">
-                            Upload Sendiri
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Template Selection -->
-                <div id="header-template-section" class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-3">Pilih Template</label>
-                    <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                        <!-- Template images will be loaded dynamically -->
-                    </div>
-                </div>
-
-                <!-- Upload Section -->
-                <div id="header-upload-section" class="mb-6 hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-3">Upload Gambar</label>
-                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                        <input type="file" id="header-image-upload" accept="image/*" class="hidden">
-                        <label for="header-image-upload" class="cursor-pointer">
-                            <svg class="w-12 h-12 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                            </svg>
-                            <p class="text-sm text-gray-600">Klik untuk memilih gambar</p>
-                            <p class="text-xs text-gray-500 mt-1">PNG, JPG, atau GIF (maks. 5MB)</p>
-                        </label>
-                    </div>
-                    <div id="header-upload-preview" class="mt-4 hidden">
-                        <img id="header-upload-preview-img" src="" alt="Preview" class="max-w-full h-32 object-contain rounded-lg border border-gray-300">
-                    </div>
-                </div>
-
-                <!-- Image Mode Selection -->
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-3">Mode Gambar</label>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="stretch">
-                            Stretch
-                        </button>
-                        <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="cover">
-                            Cover
-                        </button>
-                        <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="contain">
-                            Contain
-                        </button>
-                        <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="repeat">
-                            Repeat
-                        </button>
-                        <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="center">
-                            Center
-                        </button>
-                        <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="no-repeat">
-                            No Repeat
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="flex justify-end space-x-3">
-                    <button type="button" id="header-remove-btn" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors">
-                        Hapus Header
+            <!-- Image Source Selection -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Pilih Sumber Gambar</label>
+                <div class="flex space-x-4">
+                    <button type="button" id="header-template-btn" class="header-source-btn flex-1 px-4 py-3 border-2 border-red-600 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-colors">
+                        Template
                     </button>
-                    <button type="button" id="header-cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                        Batal
-                    </button>
-                    <button type="button" id="header-save-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">
-                        Simpan
+                    <button type="button" id="header-upload-btn" class="header-source-btn flex-1 px-4 py-3 border-2 border-gray-300 bg-white text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors">
+                        Upload Sendiri
                     </button>
                 </div>
             </div>
+
+            <!-- Template Selection -->
+            <div id="header-template-section" class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Pilih Template</label>
+                <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <!-- Template images will be loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div id="header-upload-section" class="mb-6 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Upload Gambar</label>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <input type="file" id="header-image-upload" accept="image/*" class="hidden">
+                    <label for="header-image-upload" class="cursor-pointer">
+                        <svg class="w-12 h-12 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        <p class="text-sm text-gray-600">Klik untuk memilih gambar</p>
+                        <p class="text-xs text-gray-500 mt-1">PNG, JPG, atau GIF (maks. 5MB)</p>
+                    </label>
+                </div>
+                <div id="header-upload-preview" class="mt-4 hidden">
+                    <img id="header-upload-preview-img" src="" alt="Preview" class="max-w-full h-32 object-contain rounded-lg border border-gray-300">
+                </div>
+            </div>
+
+            <!-- Image Mode Selection -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-3">Mode Gambar</label>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="stretch">
+                        Stretch
+                    </button>
+                    <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="cover">
+                        Cover
+                    </button>
+                    <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="contain">
+                        Contain
+                    </button>
+                    <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="repeat">
+                        Repeat
+                    </button>
+                    <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="center">
+                        Center
+                    </button>
+                    <button type="button" class="header-mode-btn px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium hover:border-red-600 hover:text-red-600 transition-colors" data-mode="no-repeat">
+                        No Repeat
+                    </button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="header-remove-btn" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors">
+                    Hapus Header
+                </button>
+                <button type="button" id="header-cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
+                    Batal
+                </button>
+                <button type="button" id="header-save-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors">
+                    Simpan
+                </button>
+            </div>
         </div>
     </div>
+</div>
 
 @endsection
 
 @push('scripts')
+@php
+$templateImages = [];
+// Use header-templates folder if exists, otherwise fallback to images folder with bc_ prefix
+$templatePath = public_path('assets/images/header-templates');
+$fallbackPath = public_path('assets/images');
+
+$useTemplateFolder = is_dir($templatePath);
+$imagePath = $useTemplateFolder ? $templatePath : $fallbackPath;
+$assetPath = $useTemplateFolder ? 'assets/images/header-templates' : 'assets/images';
+
+if (is_dir($imagePath)) {
+$files = scandir($imagePath);
+$counter = 1;
+foreach($files as $file) {
+if ($file !== '.' && $file !== '..') {
+// If using template folder, accept all image files. Otherwise, only files with 'bc_' prefix
+$isTemplate = $useTemplateFolder || strpos($file, 'bc_') === 0;
+if ($isTemplate) {
+$ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+$templateImages[] = [
+'name' => 'Background '.$counter,
+'path' => asset($assetPath.'/'.$file)
+];
+$counter++;
+}
+}
+}
+}
+}
+@endphp
+<script type="application/json" id="header-templates-json">
+    @json($templateImages)
+</script>
 <script>
     // Set header template images from assets (only files with prefix 'bc_')
-    @php
-    $templateImages = [];
-    // Use header-templates folder if exists, otherwise fallback to images folder with bc_ prefix
-    $templatePath = public_path('assets/images/header-templates');
-    $fallbackPath = public_path('assets/images');
-    
-    $useTemplateFolder = is_dir($templatePath);
-    $imagePath = $useTemplateFolder ? $templatePath : $fallbackPath;
-    $assetPath = $useTemplateFolder ? 'assets/images/header-templates' : 'assets/images';
-    
-    if (is_dir($imagePath)) {
-        $files = scandir($imagePath);
-        $counter = 1;
-        foreach ($files as $file) {
-            if ($file !== '.' && $file !== '..') {
-                // If using template folder, accept all image files. Otherwise, only files with 'bc_' prefix
-                $isTemplate = $useTemplateFolder || strpos($file, 'bc_') === 0;
-                if ($isTemplate) {
-                    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
-                    if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-                        $templateImages[] = [
-                            'name' => 'Background ' . $counter,
-                            'path' => asset($assetPath . '/' . $file)
-                        ];
-                        $counter++;
-                    }
-                }
-            }
-        }
-    }
-    @endphp
-    
     // Assign to global variable (will override the let declaration in form-builder.js)
-    @php
-    $jsonTemplates = json_encode($templateImages);
-    @endphp
-    window.HEADER_TEMPLATE_IMAGES = HEADER_TEMPLATE_IMAGES = {!! $jsonTemplates !!};
-    
+    window.HEADER_TEMPLATE_IMAGES = HEADER_TEMPLATE_IMAGES = JSON.parse(document.getElementById('header-templates-json').textContent);
+
     console.log('Header template images loaded:', HEADER_TEMPLATE_IMAGES);
     console.log('Template images count:', HEADER_TEMPLATE_IMAGES.length);
 
@@ -761,31 +778,69 @@ $responsesStats = $responsesStats ?? [
         const individualTab = document.getElementById('builder-individual-tab');
         const summaryPanel = document.getElementById('builder-summary-panel');
         const individualPanel = document.getElementById('builder-individual-panel');
+        const builderExportSummaryBtn = document.getElementById('builder-export-summary-btn');
+        const builderExportIndividualGroup = document.getElementById('builder-export-individual-group');
+
+        // Initialize export buttons
+        if (builderExportSummaryBtn) {
+            builderExportSummaryBtn.classList.remove('hidden');
+            builderExportSummaryBtn.classList.add('inline-flex');
+        }
+        if (builderExportIndividualGroup) {
+            builderExportIndividualGroup.classList.add('hidden');
+            // Not adding inline-flex to group because it's a relative container
+        }
 
         if (summaryTab && individualTab && summaryPanel && individualPanel) {
-            summaryTab.addEventListener('click', () => {
+            summaryTab.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Update tab styles
                 summaryTab.classList.add('text-red-600', 'border-red-600');
                 summaryTab.classList.remove('text-gray-500', 'border-transparent');
                 individualTab.classList.remove('text-red-600', 'border-red-600');
                 individualTab.classList.add('text-gray-500', 'border-transparent');
+
+                // Update panels
                 summaryPanel.classList.remove('hidden');
                 individualPanel.classList.add('hidden');
+
+                // Update export buttons
+                if (builderExportSummaryBtn) {
+                    builderExportSummaryBtn.classList.remove('hidden');
+                    builderExportSummaryBtn.classList.add('inline-flex');
+                }
+                if (builderExportIndividualGroup) {
+                    builderExportIndividualGroup.classList.add('hidden');
+                }
             });
 
-            individualTab.addEventListener('click', () => {
+            individualTab.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Update tab styles
                 individualTab.classList.add('text-red-600', 'border-red-600');
                 individualTab.classList.remove('text-gray-500', 'border-transparent');
                 summaryTab.classList.remove('text-red-600', 'border-red-600');
                 summaryTab.classList.add('text-gray-500', 'border-transparent');
+
+                // Update panels
                 individualPanel.classList.remove('hidden');
                 summaryPanel.classList.add('hidden');
-            });
-        }
 
-        const summaryShareBtn = document.getElementById('builder-open-share');
-        const headerShareBtn = document.getElementById('share-link-btn');
-        if (summaryShareBtn && headerShareBtn) {
-            summaryShareBtn.addEventListener('click', () => headerShareBtn.click());
+                // Update export buttons
+                if (builderExportSummaryBtn) {
+                    builderExportSummaryBtn.classList.add('hidden');
+                    builderExportSummaryBtn.classList.remove('inline-flex');
+                }
+                if (builderExportIndividualGroup) {
+                    builderExportIndividualGroup.classList.remove('hidden');
+                    // show individual responses data
+                    if (window.triggerResponsesFetch) window.triggerResponsesFetch();
+                }
+            });
         }
     });
 </script>

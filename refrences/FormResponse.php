@@ -15,14 +15,10 @@ class FormResponse extends Model
         'result_text',
         'ip_address',
         'user_agent',
-        'section_scores',
-        'derived_metrics',
     ];
 
     protected $casts = [
         'total_score' => 'integer',
-        'section_scores' => 'array',
-        'derived_metrics' => 'array',
     ];
 
     // Relationships

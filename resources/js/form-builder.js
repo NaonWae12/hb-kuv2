@@ -48,12 +48,12 @@ function updateMainButtonsVisibility() {
     const addSectionBtn = document.getElementById('add-section-btn');
     const buttonsContainer = addQuestionBtn?.parentElement;
     const questionsContainer = document.getElementById('questions-container');
-    
+
     if (!questionsContainer) return;
-    
+
     const questionCards = questionsContainer.querySelectorAll('.question-card');
     const hasQuestions = questionCards.length > 0;
-    
+
     if (buttonsContainer) {
         if (hasQuestions) {
             buttonsContainer.classList.add('hidden');
@@ -72,6 +72,11 @@ function resetFormRulesBuilder() {
     const resultRulesContainer = document.getElementById('result-rules-container');
     if (resultRulesContainer) {
         resultRulesContainer.innerHTML = getResultRulesPlaceholder();
+    }
+
+    const ruleGroupTitleInput = document.getElementById('rule-group-title-input');
+    if (ruleGroupTitleInput) {
+        ruleGroupTitleInput.value = '';
     }
 
     answerTemplateCounter = 0;
@@ -115,7 +120,7 @@ function setResultSettingTextValues(card, textData = []) {
                         const resultText = typeof resultTextRaw === 'string'
                             ? resultTextRaw
                             : extractResultTextValue(resultTextRaw);
-                        
+
                         return `
                             <div class="result-text-form border border-gray-200 rounded-lg p-4 bg-white ${textIndex > 0 ? 'mt-4' : ''}" data-result-rule-text-id="${resultRuleTextId}" data-result-rule-id="${ruleId}">
                                 <!-- Title Input -->
@@ -169,7 +174,7 @@ function setResultSettingTextValues(card, textData = []) {
                 `;
             })
             .join('');
-        
+
         // Attach events to image upload buttons
         display.querySelectorAll('.add-result-text-form-image-btn').forEach(btn => {
             const formContainer = btn.closest('.result-text-form');
@@ -178,16 +183,16 @@ function setResultSettingTextValues(card, textData = []) {
             const imageArea = formContainer.querySelector('.result-text-form-image-area');
             const imageEl = formContainer.querySelector('.result-text-form-image');
             const removeBtn = formContainer.querySelector('.remove-result-text-form-image-btn');
-            
+
             if (fileInput && imageValueInput) {
                 btn.addEventListener('click', () => fileInput.click());
-                
-                fileInput.addEventListener('change', function(e) {
+
+                fileInput.addEventListener('change', function (e) {
                     const file = e.target.files[0];
                     if (!file) return;
-                    
+
                     const reader = new FileReader();
-                    reader.onload = function(event) {
+                    reader.onload = function (event) {
                         const base64 = event.target.result;
                         imageValueInput.value = base64;
                         if (imageEl) imageEl.src = base64;
@@ -197,9 +202,9 @@ function setResultSettingTextValues(card, textData = []) {
                     reader.readAsDataURL(file);
                 });
             }
-            
+
             if (removeBtn && imageArea && imageValueInput && imageEl) {
-                removeBtn.addEventListener('click', function() {
+                removeBtn.addEventListener('click', function () {
                     imageValueInput.value = '';
                     imageEl.src = '';
                     imageArea.classList.add('hidden');
@@ -302,12 +307,12 @@ function buildRuleGroupTextLookup(data) {
 
         // Clone texts and add result_rule_id to each text
         const texts = (rule.texts || []).map((text) => {
-            const cloned = typeof text === 'object' 
+            const cloned = typeof text === 'object'
                 ? { ...text, result_rule_id: rule.id || null }
                 : text;
             return cloned;
         });
-        
+
         const clonedTexts = cloneResultTextItems(texts);
         if (!clonedTexts.length) {
             return;
@@ -400,6 +405,7 @@ function ensureChartJsLoaded() {
     return chartJsLoadingPromise;
 }
 
+window.triggerResponsesFetch = triggerResponsesFetch;
 function triggerResponsesFetch() {
     if (typeof requestBuilderResponsesData === 'function') {
         requestBuilderResponsesData();
@@ -567,10 +573,11 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
             questionData.section_id !== currentSectionIndex
         ) {
             currentSectionIndex = questionData.section_id;
-            const sectionDivider = createSectionDivider();
+            const sectionInfo = sectionList[currentSectionIndex] || null;
+            const sectionDivider = createSectionDivider(sectionInfo?.id);
             container.appendChild(sectionDivider);
 
-            const sectionInfo = sectionList[currentSectionIndex] || null;
+            // Using existing sectionInfo
             const sectionTitleInput = sectionDivider.querySelector('.section-title-input');
             const sectionDescInput = sectionDivider.querySelector('.section-description-input');
             const sectionImage = sectionDivider.querySelector('.section-image');
@@ -579,20 +586,20 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
             const sectionImageSettings = sectionDivider.querySelector('.section-image-settings');
             const sectionAlignmentSelect = sectionDivider.querySelector('.section-image-alignment-select');
             const sectionWrapModeSelect = sectionDivider.querySelector('.section-image-wrap-mode-select');
-            
+
             if (sectionTitleInput) {
                 // Store the HTML content first before conversion
                 const titleValue = sectionInfo && sectionInfo.title
                     ? sectionInfo.title
                     : `Bagian ${currentSectionIndex + 1}`;
                 let editableTitle = sectionTitleInput;
-                
+
                 // Convert to contenteditable if it's still an input element (like question title)
                 if (sectionTitleInput.tagName === 'INPUT' || sectionTitleInput.tagName === 'TEXTAREA') {
                     // Convert to contenteditable - HTML will be set after conversion
                     editableTitle = convertToContentEditable(sectionTitleInput);
                 }
-                
+
                 // Set HTML content (will render HTML properly, not as text)
                 if (editableTitle.contentEditable === 'true') {
                     editableTitle.innerHTML = titleValue;
@@ -605,18 +612,30 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
                     editableTitle.value = titleValue;
                 }
             }
-            
+
+            // Load Section Scoring Settings
+            if (sectionInfo) {
+                const calculateSubtotalCheckbox = sectionDivider.querySelector('.calculate-subtotal-checkbox');
+                const includeInTotalCheckbox = sectionDivider.querySelector('.include-in-total-checkbox');
+                if (calculateSubtotalCheckbox) {
+                    calculateSubtotalCheckbox.checked = Boolean(sectionInfo.calculate_subtotal);
+                }
+                if (includeInTotalCheckbox) {
+                    includeInTotalCheckbox.checked = sectionInfo.include_in_total !== undefined ? Boolean(sectionInfo.include_in_total) : true;
+                }
+            }
+
             if (sectionDescInput && sectionInfo && sectionInfo.description) {
                 // Store the HTML content first before conversion
                 const descValue = sectionInfo.description;
                 let editableDesc = sectionDescInput;
-                
+
                 // Convert to contenteditable if it's still a textarea element (like question title)
                 if (sectionDescInput.tagName === 'INPUT' || sectionDescInput.tagName === 'TEXTAREA') {
                     // Convert to contenteditable - HTML will be set after conversion
                     editableDesc = convertToContentEditable(sectionDescInput);
                 }
-                
+
                 // Set HTML content (will render HTML properly, not as text)
                 if (editableDesc.contentEditable === 'true') {
                     editableDesc.innerHTML = descValue;
@@ -639,18 +658,18 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
                     editableDesc.value = descValue;
                 }
             }
-            
+
             // Handle section image
             const existingImageSrc = sectionInfo?.image_url || sectionInfo?.image || '';
             const normalizedSectionImageSrc = normalizeMediaUrl(existingImageSrc);
             const existingImagePath = sectionInfo?.image || '';
-            
+
             if (normalizedSectionImageSrc && sectionImage && sectionImageArea) {
                 sectionImage.src = normalizedSectionImageSrc;
                 sectionImageArea.classList.remove('hidden');
                 sectionImageSettings?.classList.remove('hidden');
             }
-            
+
             if (sectionImageValueInput) {
                 let imagePath = existingImagePath;
                 if (imagePath && (imagePath.startsWith('http://') || imagePath.startsWith('https://'))) {
@@ -666,18 +685,18 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
                 }
                 sectionImageValueInput.value = imagePath || '';
             }
-            
+
             if (sectionAlignmentSelect) {
                 sectionAlignmentSelect.value = sectionInfo?.image_alignment ?? 'center';
             }
-            
+
             if (sectionWrapModeSelect) {
                 sectionWrapModeSelect.value = sectionInfo?.image_wrap_mode ?? 'fixed';
             }
-            
+
             // Attach section events (this will set up updateImageStyle function and event listeners)
             attachSectionEvents(sectionDivider);
-            
+
             // Apply image style after loading - trigger change event to apply style
             if (normalizedSectionImageSrc && sectionImage) {
                 // Wait a bit for attachSectionEvents to finish setting up
@@ -703,7 +722,7 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
         }
 
         const questionType = questionData.type || 'short-answer';
-        const questionCard = createQuestionCard(questionType);
+        const questionCard = createQuestionCard(questionType, questionData.id);
         container.appendChild(questionCard);
 
         const titleInput = questionCard.querySelector('.question-title');
@@ -712,12 +731,12 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
             // Store the HTML content first before conversion
             const htmlContent = questionData.title || '';
             let editableTitle = titleInput;
-            
+
             if (titleInput.tagName === 'INPUT' || titleInput.tagName === 'TEXTAREA') {
                 // Convert to contenteditable - HTML will be set after conversion
                 editableTitle = convertToContentEditable(titleInput);
             }
-            
+
             // Set HTML content (will render HTML properly, not as text)
             if (editableTitle.contentEditable === 'true') {
                 editableTitle.innerHTML = htmlContent;
@@ -870,9 +889,12 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
     initSortable();
 }
 
-function createOptionElementNode(type, text = '', index = 0, templateIndex = null) {
+function createOptionElementNode(type, text = '', index = 0, templateIndex = null, dbId = null) {
     const optionItem = document.createElement('div');
     optionItem.className = 'option-item flex items-center space-x-2';
+    if (dbId) {
+        optionItem.setAttribute('data-db-id', dbId);
+    }
 
     if (type === 'multiple-choice') {
         const indicator = document.createElement('span');
@@ -935,7 +957,7 @@ function setQuestionOptions(card, questionType, options) {
 
     normalizedOptions.forEach((option, idx) => {
         const templateIndex = option?.answer_template_index ?? option?.answer_template_id ?? null;
-        const optionNode = createOptionElementNode(questionType, option?.text || '', idx, templateIndex);
+        const optionNode = createOptionElementNode(questionType, option?.text || '', idx, templateIndex, option?.id);
         if (insertBeforeNode) {
             container.insertBefore(optionNode, insertBeforeNode);
         } else {
@@ -945,6 +967,8 @@ function setQuestionOptions(card, questionType, options) {
 }
 
 function hydrateRuleBuilderFromPreset(preset) {
+    resetFormRulesBuilder();
+
     // Load title to input
     const titleInput = document.getElementById('rule-group-title-input');
     if (titleInput && preset) {
@@ -956,8 +980,6 @@ function hydrateRuleBuilderFromPreset(preset) {
     if (!answerTemplatesContainer || !resultRulesContainer) {
         return;
     }
-
-    resetFormRulesBuilder();
 
     if (normalized.templates?.length) {
         answerTemplatesContainer.innerHTML = '';
@@ -1026,11 +1048,14 @@ function hydrateRuleBuilderFromPreset(preset) {
 }
 
 // Fungsi untuk membuat section divider
-function createSectionDivider() {
+function createSectionDivider(dbId = null) {
     sectionCounter++;
     const sectionDivider = document.createElement('div');
     sectionDivider.className = 'section-divider bg-white rounded-lg shadow-sm border-2 border-dashed border-gray-300 p-6 my-6 group';
     sectionDivider.setAttribute('data-section-id', sectionCounter);
+    if (dbId) {
+        sectionDivider.setAttribute('data-db-id', dbId);
+    }
     sectionDivider.innerHTML = `
         <div class="flex items-start justify-between">
             <div class="flex-1">
@@ -1046,17 +1071,17 @@ function createSectionDivider() {
                         </svg>
                     </div>
                     <div class="flex-1">
-                        <input 
-                            type="text" 
-                            placeholder="Judul Bagian" 
-                            class="section-title-input w-full text-lg font-medium text-gray-900 border-none outline-none focus:ring-0 placeholder-gray-400 pb-1 border-b-2 border-transparent focus:border-red-600 transition-colors"
-                            value="Bagian ${sectionCounter}"
-                        >
-                        <textarea 
-                            placeholder="Deskripsi bagian (opsional)" 
-                            rows="2"
-                            class="section-description-input w-full mt-2 text-sm text-gray-500 border-none outline-none focus:ring-0 placeholder-gray-400 pb-1 border-b border-transparent focus:border-red-600 transition-colors resize-none"
-                        ></textarea>
+                        <div 
+                            contenteditable="true"
+                            data-placeholder="Bagian ${sectionCounter}" 
+                            class="section-title-input w-full text-lg font-medium text-gray-900 border-none outline-none focus:ring-0 pb-1 border-b-2 border-transparent focus:border-red-600 transition-colors empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
+                        ></div>
+                        <div 
+                            contenteditable="true"
+                            data-placeholder="Deskripsi bagian (opsional)" 
+                            class="section-description-input w-full mt-2 text-sm text-gray-500 border-none outline-none focus:ring-0 pb-1 border-b border-transparent focus:border-red-600 transition-colors empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
+                            style="min-height: 1.5em;"
+                        ></div>
                     </div>
                 </div>
                 
@@ -1094,6 +1119,29 @@ function createSectionDivider() {
                         </select>
                     </div>
                 </div>
+
+                <!-- Section Scoring Settings -->
+                <div class="section-scoring-settings mt-6 pt-4 border-t border-gray-100">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Pengaturan Skor Bagian</p>
+                    <div class="space-y-3">
+                        <label class="flex items-center space-x-3 cursor-pointer group/label">
+                            <div class="relative inline-block w-11 h-6">
+                                <input type="checkbox" class="calculate-subtotal-checkbox sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer-checked:bg-red-600 transition-colors"></div>
+                                <div class="absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-5 w-5 transition-transform peer-checked:translate-x-full peer-checked:border-white"></div>
+                            </div>
+                            <span class="text-sm text-gray-700 group-hover/label:text-gray-900 transition-colors">Hitung Subtotal Skor untuk Bagian ini</span>
+                        </label>
+                        <label class="flex items-center space-x-3 cursor-pointer group/label">
+                            <div class="relative inline-block w-11 h-6">
+                                <input type="checkbox" class="include-in-total-checkbox sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer-checked:bg-red-600 transition-colors"></div>
+                                <div class="absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-5 w-5 transition-transform peer-checked:translate-x-full peer-checked:border-white"></div>
+                            </div>
+                            <span class="text-sm text-gray-700 group-hover/label:text-gray-900 transition-colors">Sertakan skor bagian ini ke Total Skor Form</span>
+                        </label>
+                    </div>
+                </div>
             </div>
             
             <div class="flex flex-col items-end space-y-2 ml-4">
@@ -1124,22 +1172,22 @@ function attachSectionEvents(sectionDivider) {
     const imageSettings = sectionDivider.querySelector('.section-image-settings');
     const alignmentSelect = sectionDivider.querySelector('.section-image-alignment-select');
     const wrapModeSelect = sectionDivider.querySelector('.section-image-wrap-mode-select');
-    
+
     // Function to update image style based on alignment and wrap mode
     const updateImageStyle = () => {
         if (!sectionImage || !imageArea) return;
-        
+
         const alignment = alignmentSelect?.value || 'center';
         const wrapMode = wrapModeSelect?.value || 'fixed';
-        
+
         // Update alignment class
         imageArea.classList.remove('text-left', 'text-center', 'text-right');
         imageArea.classList.add(
-            alignment === 'left' ? 'text-left' : 
-            alignment === 'right' ? 'text-right' : 
-            'text-center'
+            alignment === 'left' ? 'text-left' :
+                alignment === 'right' ? 'text-right' :
+                    'text-center'
         );
-        
+
         // Update wrap mode style
         if (wrapMode === 'fit') {
             sectionImage.style.width = '100%';
@@ -1153,7 +1201,7 @@ function attachSectionEvents(sectionDivider) {
             sectionImage.style.objectFit = 'contain';
         }
     };
-    
+
     const showImageControls = () => {
         if (imageArea) {
             imageArea.classList.remove('hidden');
@@ -1163,7 +1211,7 @@ function attachSectionEvents(sectionDivider) {
         }
         updateImageStyle();
     };
-    
+
     const hideImageControls = () => {
         if (imageArea) {
             imageArea.classList.add('hidden');
@@ -1172,23 +1220,23 @@ function attachSectionEvents(sectionDivider) {
             imageSettings.classList.add('hidden');
         }
     };
-    
+
     if (addImageBtn && imageFileInput) {
-        addImageBtn.addEventListener('click', function() {
+        addImageBtn.addEventListener('click', function () {
             imageFileInput.click();
         });
     }
-    
+
     if (imageFileInput) {
-        imageFileInput.addEventListener('change', function(e) {
+        imageFileInput.addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = function(e) {
+                reader.onload = function (e) {
                     if (sectionImage) {
                         sectionImage.src = e.target.result;
                         // Wait for image to load then apply style
-                        sectionImage.addEventListener('load', function() {
+                        sectionImage.addEventListener('load', function () {
                             updateImageStyle();
                         }, { once: true });
                     }
@@ -1201,9 +1249,9 @@ function attachSectionEvents(sectionDivider) {
             }
         });
     }
-    
+
     if (sectionImage) {
-        sectionImage.addEventListener('error', function() {
+        sectionImage.addEventListener('error', function () {
             sectionImage.removeAttribute('src');
             hideImageControls();
             if (imageValueInput) {
@@ -1211,9 +1259,9 @@ function attachSectionEvents(sectionDivider) {
             }
         });
     }
-    
+
     if (removeImageBtn) {
-        removeImageBtn.addEventListener('click', function() {
+        removeImageBtn.addEventListener('click', function () {
             hideImageControls();
             if (sectionImage) {
                 sectionImage.src = '';
@@ -1232,21 +1280,21 @@ function attachSectionEvents(sectionDivider) {
             }
         });
     }
-    
+
     // Update image style when alignment changes
     if (alignmentSelect) {
-        alignmentSelect.addEventListener('change', function() {
+        alignmentSelect.addEventListener('change', function () {
             updateImageStyle();
         });
     }
-    
+
     // Update image style when wrap mode changes
     if (wrapModeSelect) {
-        wrapModeSelect.addEventListener('change', function() {
+        wrapModeSelect.addEventListener('change', function () {
             updateImageStyle();
         });
     }
-    
+
     // Initial style update if image already exists
     if (sectionImage && sectionImage.src) {
         updateImageStyle();
@@ -1260,12 +1308,12 @@ function createResultSettingCard() {
     const card = document.createElement('div');
     card.className = 'result-setting-card bg-white rounded-lg shadow-sm border-2 border-gray-200 p-6 my-6 transition-all';
     card.setAttribute('data-result-setting-id', resultSettingCounter);
-    
+
     // Get result rules from settings tab and saved rules
     const resultRulesContainer = document.getElementById('result-rules-container');
     const resultRules = resultRulesContainer ? Array.from(resultRulesContainer.querySelectorAll('.result-rule-card')) : [];
     const savedRules = loadSavedRules();
-    
+
     // Get rule_groups data from form data (if available)
     const rootElement = document.getElementById('form-builder-root');
     const initialDataAttr = rootElement?.getAttribute('data-initial');
@@ -1280,7 +1328,7 @@ function createResultSettingCard() {
             ruleGroupsData = {};
         }
     }
-    
+
     // PRIORITAS 1: Build options from initialData.rule_groups first (data dari database)
     // Ini penting untuk memastikan semua rule_group_id yang ada di result_settings tersedia di dropdown
     const allRuleGroups = new Map();
@@ -1291,7 +1339,7 @@ function createResultSettingCard() {
             }
         });
     }
-    
+
     // PRIORITAS 2: Group active rules by rule_group_id and get unique titles (dari DOM)
     const activeRuleGroups = new Map();
     resultRules.forEach((ruleCard) => {
@@ -1299,7 +1347,7 @@ function createResultSettingCard() {
         if (ruleGroupId && !activeRuleGroups.has(ruleGroupId) && !allRuleGroups.has(ruleGroupId)) {
             // Try to get title from rule_groups data first
             let title = ruleGroupsData[ruleGroupId] || null;
-            
+
             // If not found, try from saved rules
             if (!title) {
                 const matchingRule = savedRules.find(r => {
@@ -1310,7 +1358,7 @@ function createResultSettingCard() {
                     title = normalizeSavedRule(matchingRule).title;
                 }
             }
-            
+
             // If still not found, try to get from rule-group-title-input (for new rules being edited)
             if (!title) {
                 const titleInput = document.getElementById('rule-group-title-input');
@@ -1318,11 +1366,11 @@ function createResultSettingCard() {
                     title = titleInput.value.trim();
                 }
             }
-            
+
             activeRuleGroups.set(ruleGroupId, title || `Aturan ${activeRuleGroups.size + 1}`);
         }
     });
-    
+
     // PRIORITAS 3: Add saved rules options (only title, grouped by rule_group_id)
     const savedRuleGroups = new Map();
     savedRules.forEach((savedRule) => {
@@ -1332,25 +1380,25 @@ function createResultSettingCard() {
             savedRuleGroups.set(normalized.rule_group_id, ruleTitle);
         }
     });
-    
+
     // Build options: mulai dari initialData.rule_groups, lalu active rules, lalu saved rules
     let resultRuleOptions = '';
-    
+
     // Add from initialData.rule_groups (prioritas tertinggi - data dari database)
     allRuleGroups.forEach((title, ruleGroupId) => {
         resultRuleOptions += `<option value="active-${ruleGroupId}" data-rule-type="active" data-rule-group-id="${ruleGroupId}">${title}</option>`;
     });
-    
+
     // Add from active rule groups (dari DOM)
     activeRuleGroups.forEach((title, ruleGroupId) => {
         resultRuleOptions += `<option value="active-${ruleGroupId}" data-rule-type="active" data-rule-group-id="${ruleGroupId}">${title}</option>`;
     });
-    
+
     // Add from saved rules
     savedRuleGroups.forEach((title, ruleGroupId) => {
         resultRuleOptions += `<option value="saved-${ruleGroupId}" data-rule-type="saved" data-rule-group-id="${ruleGroupId}">${title}</option>`;
     });
-    
+
     card.innerHTML = `
         <div class="flex items-start justify-between">
             <div class="flex-1">
@@ -1456,7 +1504,7 @@ function attachResultSettingEvents(card) {
     const deleteBtn = card.querySelector('.delete-result-setting-btn');
 
     // Add outline on click (similar to question card)
-    card.addEventListener('click', function(e) {
+    card.addEventListener('click', function (e) {
         const shouldSkipFocus = e.target.closest('button')
             || e.target.closest('input')
             || e.target.closest('textarea')
@@ -1472,7 +1520,7 @@ function attachResultSettingEvents(card) {
             c.classList.remove('ring-2', 'ring-red-600', 'border-red-600');
             c.classList.add('border-gray-200');
         });
-        
+
         // Add active to this card
         card.classList.add('ring-2', 'ring-red-600', 'border-red-600');
         card.classList.remove('border-gray-200');
@@ -1483,14 +1531,14 @@ function attachResultSettingEvents(card) {
         if (!selectedOption) {
             return [];
         }
-        
+
         const ruleGroupId = selectedOption.getAttribute('data-rule-group-id');
         const ruleType = selectedOption.getAttribute('data-rule-type');
-        
+
         if (!ruleGroupId) {
             return [];
         }
-        
+
         const logResultTexts = (source, texts) => {
             if (!Array.isArray(texts)) {
                 return;
@@ -1502,25 +1550,25 @@ function attachResultSettingEvents(card) {
                 texts,
             });
         };
-        
+
         // Get texts from active rules - langsung dari lookup table (data dari database)
         // Tidak perlu ambil dari DOM karena result_text readonly dan data sudah lengkap di lookup table
         if (ruleType === 'active') {
             // Prioritaskan lookup table yang sudah di-build dari initialData (database)
             // Lookup table sudah lengkap dengan semua result_text dari semua result_rules dalam rule_group_id
             const textsFromLookup = getRuleGroupTextFromLookup(ruleGroupId);
-            
+
             if (textsFromLookup.length) {
                 logResultTexts('active-lookup', textsFromLookup);
                 return textsFromLookup;
             }
-            
+
             // Fallback: coba ambil dari DOM jika lookup kosong (untuk form baru yang belum disimpan)
             const resultRulesContainer = document.getElementById('result-rules-container');
             if (resultRulesContainer) {
                 const ruleCards = Array.from(resultRulesContainer.querySelectorAll('.result-rule-card'));
                 const matchingRules = ruleCards.filter(card => card.getAttribute('data-rule-group-id') === ruleGroupId);
-                
+
                 // Collect all texts from all matching rules with temporary IDs
                 const allTexts = [];
                 matchingRules.forEach((ruleCard, ruleIndex) => {
@@ -1540,7 +1588,7 @@ function attachResultSettingEvents(card) {
                         }
                     });
                 });
-                
+
                 if (allTexts.length) {
                     // Update lookup table untuk form baru
                     updateRuleGroupTextLookup(ruleGroupId, allTexts);
@@ -1548,12 +1596,12 @@ function attachResultSettingEvents(card) {
                     return allTexts;
                 }
             }
-            
+
             // Final fallback: return empty array
             logResultTexts('active-empty', []);
             return [];
         }
-        
+
         // Get texts from saved rules
         if (ruleType === 'saved') {
             const savedRules = loadSavedRules();
@@ -1561,7 +1609,7 @@ function attachResultSettingEvents(card) {
                 const normalized = normalizeSavedRule(r);
                 return normalized.rule_group_id === ruleGroupId;
             });
-            
+
             if (matchingRule) {
                 const normalized = normalizeSavedRule(matchingRule);
                 if (normalized.result_rules && Array.isArray(normalized.result_rules)) {
@@ -1607,7 +1655,7 @@ function attachResultSettingEvents(card) {
                 return fallbackSaved;
             }
         }
-        
+
         const fallback = getRuleGroupTextFromLookup(ruleGroupId);
         logResultTexts('general-fallback', fallback);
         return fallback;
@@ -1628,10 +1676,10 @@ function attachResultSettingEvents(card) {
         const alignment = textAlignmentSelect?.value || 'center';
         textDisplay.style.textAlign = alignment;
     };
-    
+
     // Update text from selected rule
     if (ruleSelect) {
-        ruleSelect.addEventListener('change', function() {
+        ruleSelect.addEventListener('change', function () {
             const ruleTexts = getRuleTextsFromSettings();
             setResultSettingTextValues(card, ruleTexts);
             updateTextAlignment();
@@ -1641,17 +1689,17 @@ function attachResultSettingEvents(card) {
     setResultSettingTextValues(card, []);
     updateImageAlignment();
     updateTextAlignment();
-    
+
     // Image upload
     if (addImageBtn && imageFileInput) {
         addImageBtn.addEventListener('click', () => imageFileInput.click());
-        
-        imageFileInput.addEventListener('change', function(e) {
+
+        imageFileInput.addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (!file) return;
-            
+
             const reader = new FileReader();
-            reader.onload = function(event) {
+            reader.onload = function (event) {
                 const base64 = event.target.result;
                 if (imageValueInput) {
                     imageValueInput.value = base64;
@@ -1670,10 +1718,10 @@ function attachResultSettingEvents(card) {
             reader.readAsDataURL(file);
         });
     }
-    
+
     // Remove image
     if (removeImageBtn) {
-        removeImageBtn.addEventListener('click', function() {
+        removeImageBtn.addEventListener('click', function () {
             if (imageValueInput) {
                 imageValueInput.value = '';
             }
@@ -1692,32 +1740,32 @@ function attachResultSettingEvents(card) {
             updateImageAlignment();
         });
     }
-    
+
     updateImageAlignment();
     updateTextAlignment();
 
     // Delete card (only delete setting_results on server, keep rules)
     if (deleteBtn) {
-        deleteBtn.addEventListener('click', async function(e) {
+        deleteBtn.addEventListener('click', async function (e) {
             e.stopPropagation();
             const selectedOption = ruleSelect?.selectedOptions?.[0] || null;
             const ruleGroupId = selectedOption ? selectedOption.getAttribute('data-rule-group-id') : null;
-            
+
             // If no rule group selected, just remove the card locally
             if (!ruleGroupId) {
                 card.remove();
                 return;
             }
-            
+
             const formId = document.getElementById('form-builder-root')?.getAttribute('data-form-id');
             if (!formId) {
                 card.remove();
                 return;
             }
-            
+
             const csrfToken = getMetaContent('csrf-token');
             const url = `/forms/${formId}/setting-results/${encodeURIComponent(ruleGroupId)}`;
-            
+
             try {
                 const res = await fetch(url, {
                     method: 'DELETE',
@@ -1739,26 +1787,26 @@ function attachResultSettingEvents(card) {
             }
         });
     }
-    
+
     // Add new result setting card
     const addNewBtn = card.querySelector('.add-new-result-setting-btn');
     if (addNewBtn) {
-        addNewBtn.addEventListener('click', function(e) {
+        addNewBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             const questionsContainer = document.getElementById('questions-container');
             if (questionsContainer) {
                 const newResultSettingCard = createResultSettingCard();
                 attachResultSettingEvents(newResultSettingCard);
-                
+
                 // Insert after current card
                 if (card.nextSibling) {
                     questionsContainer.insertBefore(newResultSettingCard, card.nextSibling);
                 } else {
                     questionsContainer.appendChild(newResultSettingCard);
                 }
-                
+
                 updateMainButtonsVisibility();
-                
+
                 // Scroll to the new card
                 newResultSettingCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
@@ -1945,14 +1993,17 @@ const questionTemplates = {
 };
 
 // Fungsi untuk membuat question card
-function createQuestionCard(type = 'short-answer') {
+function createQuestionCard(type = 'short-answer', dbId = null) {
     questionCounter++;
     const template = questionTemplates[type];
-    
+
     const questionCard = document.createElement('div');
     questionCard.className = 'question-card bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all relative group';
     questionCard.setAttribute('data-question-id', questionCounter);
     questionCard.setAttribute('data-question-type', type);
+    if (dbId) {
+        questionCard.setAttribute('data-db-id', dbId);
+    }
     questionCard.innerHTML = `
         <!-- Drag Handle -->
         <button type="button" class="drag-handle absolute top-2 left-1/2 -translate-x-1/2 p-1.5 text-gray-400 hover:text-red-600 rounded-full bg-white/80 shadow opacity-0 group-hover:opacity-100 transition-all cursor-grab focus:outline-none" data-drag-handle>
@@ -2041,9 +2092,10 @@ function createQuestionCard(type = 'short-answer') {
                         </div>
                         <div class="flex items-center space-x-4">
                             <label class="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
-                                <input type="checkbox" class="required-checkbox sr-only">
-                                <div class="toggle-switch relative w-11 h-6 bg-gray-300 rounded-full transition-colors duration-200 ease-in-out">
-                                    <div class="toggle-switch-handle absolute top-[2px] left-[2px] bg-white rounded-full h-5 w-5 transition-transform duration-200 ease-in-out shadow-sm"></div>
+                                <div class="relative inline-block w-11 h-6">
+                                    <input type="checkbox" class="required-checkbox sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer-checked:bg-red-600 transition-colors"></div>
+                                    <div class="absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-5 w-5 transition-transform peer-checked:translate-x-full peer-checked:border-white"></div>
                                 </div>
                                 <span class="select-none">Wajib diisi</span>
                             </label>
@@ -2146,7 +2198,7 @@ function createQuestionCard(type = 'short-answer') {
             </div>
         </div>
     `;
-    
+
     return questionCard;
 }
 
@@ -2154,26 +2206,26 @@ function createQuestionCard(type = 'short-answer') {
 function initTabs() {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
-    
+
     tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function () {
             const targetTab = this.getAttribute('data-tab');
-            
+
             // Remove active dari semua tabs
             tabButtons.forEach(btn => {
                 btn.classList.remove('active', 'text-red-600', 'border-red-600');
                 btn.classList.add('text-gray-600', 'border-transparent');
             });
-            
+
             // Hide semua tab content
             tabContents.forEach(content => {
                 content.classList.add('hidden');
             });
-            
+
             // Add active ke tab yang diklik
             this.classList.add('active', 'text-red-600', 'border-red-600');
             this.classList.remove('text-gray-600', 'border-transparent');
-            
+
             // Show target tab content
             const targetContent = document.getElementById(`tab-${targetTab}`);
             if (targetContent) {
@@ -2184,49 +2236,119 @@ function initTabs() {
             }
         });
     });
-    
+
     // Initialize toggle switches di tab Setelan
     initSettingsToggles();
 }
 
 // Initialize toggle switches untuk settings
+// Initialize toggle switches untuk settings
 function initSettingsToggles() {
     const settingsToggles = document.querySelectorAll('#tab-settings input[type="checkbox"]');
-    
+
     settingsToggles.forEach(toggle => {
-        const toggleSwitch = toggle.nextElementSibling;
-        const toggleHandle = toggleSwitch.querySelector('div');
-        
-        if (toggleSwitch && toggleHandle) {
-            function updateToggleState() {
+        // Listen for changes
+        toggle.addEventListener('change', () => {
+            // Specific logic for BMI toggle
+            if (toggle.id === 'use-bmi-formula') {
                 if (toggle.checked) {
-                    toggleSwitch.classList.remove('bg-gray-300');
-                    toggleSwitch.classList.add('bg-red-600');
-                    toggleHandle.classList.add('translate-x-5');
-                    toggleHandle.classList.remove('translate-x-0');
+                    ensureBmiQuestionsExist();
                 } else {
-                    toggleSwitch.classList.add('bg-gray-300');
-                    toggleSwitch.classList.remove('bg-red-600');
-                    toggleHandle.classList.remove('translate-x-5');
-                    toggleHandle.classList.add('translate-x-0');
+                    removeBmiQuestions();
                 }
             }
-            
-            // Initialize state
-            updateToggleState();
-            
-            // Listen for changes
-            toggle.addEventListener('change', updateToggleState);
-            
-            // Allow clicking on the switch itself
-            toggleSwitch.addEventListener('click', function(e) {
-                e.preventDefault();
-                toggle.checked = !toggle.checked;
-                updateToggleState();
-            });
+        });
+    });
+
+    // Initial check for BMI
+    const bmiToggle = document.getElementById('use-bmi-formula');
+    if (bmiToggle && bmiToggle.checked) {
+        ensureBmiQuestionsExist();
+    }
+}
+
+
+/**
+ * Memastikan pertanyaan untuk BMI (BB & TB) ada di dalam form.
+ * Jika tidak ada, tambahkan secara otomatis.
+ */
+function ensureBmiQuestionsExist() {
+    const questionsContainer = document.getElementById('questions-container');
+    if (!questionsContainer) return;
+
+    const allTitles = Array.from(questionsContainer.querySelectorAll('.question-title'))
+        .map(el => {
+            const val = el.contentEditable === 'true' ? el.innerText : el.value;
+            return (val || '').trim().toLowerCase();
+        });
+
+    const hasWeight = allTitles.includes('berat badan (kg)');
+    const hasHeight = allTitles.includes('tinggi badan (cm)');
+
+    if (!hasWeight) {
+        addBmiQuestion('Berat Badan (kg)');
+    }
+
+    if (!hasHeight) {
+        addBmiQuestion('Tinggi Badan (cm)');
+    }
+}
+
+function addBmiQuestion(title) {
+    const questionsContainer = document.getElementById('questions-container');
+    const questionCard = createQuestionCard('short-answer');
+    questionsContainer.appendChild(questionCard);
+
+    const titleInput = questionCard.querySelector('.question-title');
+    if (titleInput) {
+        if (titleInput.contentEditable === 'true') {
+            titleInput.innerText = title;
+        } else {
+            titleInput.value = title;
+        }
+    }
+
+    // Set is_required by default for BMI questions
+    const requiredCheckbox = questionCard.querySelector('.required-checkbox');
+    if (requiredCheckbox) {
+        requiredCheckbox.checked = true;
+    }
+
+    updateQuestionNumbers();
+    attachQuestionCardEvents(questionCard);
+    initSortable();
+    updateMainButtonsVisibility();
+}
+
+/**
+ * Remove BMI questions if they exist.
+ */
+function removeBmiQuestions() {
+    const questionsContainer = document.getElementById('questions-container');
+    if (!questionsContainer) return;
+
+    const cards = Array.from(questionsContainer.querySelectorAll('.question-card'));
+    let removed = false;
+
+    cards.forEach(card => {
+        const titleInput = card.querySelector('.question-title');
+        if (!titleInput) return;
+
+        const val = (titleInput.contentEditable === 'true' ? titleInput.innerText : titleInput.value) || '';
+        const title = val.trim().toLowerCase();
+
+        if (title === 'berat badan (kg)' || title === 'tinggi badan (cm)') {
+            card.remove();
+            removed = true;
         }
     });
+
+    if (removed) {
+        updateQuestionNumbers();
+        updateMainButtonsVisibility();
+    }
 }
+
 
 // Form Rules Management
 let answerTemplateCounter = 0;
@@ -2266,16 +2388,16 @@ function createAnswerTemplateCard(dbId = null, ruleGroupId = null) {
     return templateCard;
 }
 
-function appendAnswerTemplateCard(container) {
-    const templateCard = createAnswerTemplateCard();
+function appendAnswerTemplateCard(container, dbId = null, ruleGroupId = null) {
+    const templateCard = createAnswerTemplateCard(dbId, ruleGroupId);
     container.appendChild(templateCard);
 
     const deleteBtn = templateCard.querySelector('.delete-answer-template-btn');
     if (deleteBtn) {
-        deleteBtn.addEventListener('click', async function() {
+        deleteBtn.addEventListener('click', async function () {
             const dbId = templateCard.getAttribute('data-db-id');
             const formId = getMetaContent('form-id');
-            
+
             // If form is saved and template has database ID, delete from database
             if (formId && dbId) {
                 try {
@@ -2287,7 +2409,7 @@ function appendAnswerTemplateCard(container) {
                             'Accept': 'application/json',
                         },
                     });
-                    
+
                     const data = await response.json();
                     if (!response.ok || !data.success) {
                         throw new Error(data.message || 'Gagal menghapus template.');
@@ -2298,7 +2420,7 @@ function appendAnswerTemplateCard(container) {
                     return; // Don't remove from DOM if database delete failed
                 }
             }
-            
+
             // Remove from DOM
             templateCard.remove();
             if (container.children.length === 0) {
@@ -2309,6 +2431,23 @@ function appendAnswerTemplateCard(container) {
     }
 
     return templateCard;
+}
+
+function createResultTextItem(value = '', dbId = null) {
+    const textItem = document.createElement('div');
+    textItem.className = 'result-text-item flex items-start space-x-2';
+    if (dbId) {
+        textItem.setAttribute('data-db-id', dbId);
+    }
+    textItem.innerHTML = `
+        <textarea placeholder="Masukkan teks hasil yang akan ditampilkan" rows="2" class="rule-result-text flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none resize-none">${value}</textarea>
+        <button class="delete-result-text-btn p-2 text-gray-400 hover:text-red-600 transition-colors shrink-0" title="Hapus teks">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    `;
+    return textItem;
 }
 
 // Fungsi untuk membuat result rule card
@@ -2360,14 +2499,7 @@ function createResultRuleCard(dbId = null, ruleGroupId = null) {
                     </button>
                 </div>
                 <div class="rule-result-texts space-y-2" data-rule-id="${resultRuleCounter}">
-                    <div class="flex items-start space-x-2">
-                        <textarea placeholder="Masukkan teks hasil yang akan ditampilkan" rows="2" class="rule-result-text flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none resize-none"></textarea>
-                        <button class="delete-result-text-btn p-2 text-gray-400 hover:text-red-600 transition-colors shrink-0" title="Hapus teks">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
-                    </div>
+                    <!-- Initial text item will be added via JS if needed -->
                 </div>
             </div>
         </div>
@@ -2376,121 +2508,19 @@ function createResultRuleCard(dbId = null, ruleGroupId = null) {
     return ruleCard;
 }
 
-function appendResultRuleCard(container) {
-    const ruleCard = createResultRuleCard(null);
+function appendResultRuleCard(container, dbId = null, ruleGroupId = null) {
+    const ruleCard = createResultRuleCard(dbId, ruleGroupId);
     container.appendChild(ruleCard);
 
-    const conditionSelect = ruleCard.querySelector('.rule-condition-type');
-    const rangeInputs = ruleCard.querySelector('.rule-range-inputs');
-    const singleInput = ruleCard.querySelector('.rule-single-inputs');
-
-    if (conditionSelect) {
-        conditionSelect.addEventListener('change', function () {
-            const conditionType = this.value;
-            const singleScoreInput = singleInput.querySelector('.rule-single-score');
-
-            if (conditionType === 'range') {
-                rangeInputs.classList.remove('hidden');
-                singleInput.classList.add('hidden');
-            } else {
-                rangeInputs.classList.add('hidden');
-                singleInput.classList.remove('hidden');
-
-                if (singleScoreInput) {
-                    if (conditionType === 'equal') {
-                        singleScoreInput.placeholder = 'Nilai (sama dengan)';
-                    } else if (conditionType === 'greater') {
-                        singleScoreInput.placeholder = 'Nilai (lebih dari)';
-                    } else if (conditionType === 'less') {
-                        singleScoreInput.placeholder = 'Nilai (kurang dari)';
-                    }
-                }
-            }
-        });
-    }
-
-    const addResultTextBtn = ruleCard.querySelector('.add-result-text-btn');
+    // Add initial text item if empty
     const resultTextsContainer = ruleCard.querySelector('.rule-result-texts');
-
-    if (addResultTextBtn && resultTextsContainer) {
-        addResultTextBtn.addEventListener('click', function () {
-            const textItem = document.createElement('div');
-            textItem.className = 'flex items-start space-x-2';
-            textItem.innerHTML = `
-                <textarea placeholder="Masukkan teks hasil yang akan ditampilkan" rows="2" class="rule-result-text flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none resize-none"></textarea>
-                <button class="delete-result-text-btn p-2 text-gray-400 hover:text-red-600 transition-colors shrink-0" title="Hapus teks">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            `;
-            resultTextsContainer.appendChild(textItem);
-
-            const deleteBtn = textItem.querySelector('.delete-result-text-btn');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', function () {
-                    textItem.remove();
-                    const remaining = resultTextsContainer.querySelectorAll('.rule-result-text');
-                    if (!remaining.length) {
-                        addResultTextBtn.click();
-                    }
-                });
-            }
-        });
+    if (resultTextsContainer && resultTextsContainer.children.length === 0) {
+        const textItem = createResultTextItem();
+        resultTextsContainer.appendChild(textItem);
     }
 
-    const deleteTextBtns = ruleCard.querySelectorAll('.delete-result-text-btn');
-    deleteTextBtns.forEach(btn => {
-        btn.addEventListener('click', function () {
-            const textItem = this.closest('.flex.items-start.space-x-2');
-            if (textItem) {
-                textItem.remove();
-                const remaining = ruleCard.querySelectorAll('.rule-result-text');
-                if (!remaining.length && addResultTextBtn) {
-                    addResultTextBtn.click();
-                }
-            }
-        });
-    });
-
-    const deleteRuleBtn = ruleCard.querySelector('.delete-result-rule-btn');
-    if (deleteRuleBtn) {
-        deleteRuleBtn.addEventListener('click', async function () {
-            const dbId = ruleCard.getAttribute('data-db-id');
-            const formId = getMetaContent('form-id');
-            
-            // If form is saved and rule has database ID, delete from database
-            if (formId && dbId) {
-                try {
-                    const response = await fetch(`/forms/${formId}/result-rules/${dbId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'X-CSRF-TOKEN': getMetaContent('csrf-token'),
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Accept': 'application/json',
-                        },
-                    });
-                    
-                    const data = await response.json();
-                    if (!response.ok || !data.success) {
-                        throw new Error(data.message || 'Gagal menghapus aturan.');
-                    }
-                } catch (error) {
-                    console.error('Error deleting rule:', error);
-                    alert('Gagal menghapus aturan dari database: ' + error.message);
-                    return; // Don't remove from DOM if database delete failed
-                }
-            }
-            
-            // Remove from DOM
-            ruleCard.remove();
-            if (container.children.length === 0) {
-                container.innerHTML = getResultRulesPlaceholder();
-            }
-            renderSavedRulesChips();
-            updateUseRuleButtonsVisibility();
-        });
-    }
+    // Attach all events (including delete behavior)
+    attachResultRuleEvents(ruleCard, container);
 
     return ruleCard;
 }
@@ -2534,16 +2564,7 @@ function attachResultRuleEvents(ruleCard, container) {
         if (!addResultTextBtn.hasAttribute('data-listener')) {
             addResultTextBtn.setAttribute('data-listener', 'true');
             addResultTextBtn.addEventListener('click', function () {
-                const textItem = document.createElement('div');
-                textItem.className = 'flex items-start space-x-2';
-                textItem.innerHTML = `
-                    <textarea placeholder="Masukkan teks hasil yang akan ditampilkan" rows="2" class="rule-result-text flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none resize-none"></textarea>
-                    <button class="delete-result-text-btn p-2 text-gray-400 hover:text-red-600 transition-colors shrink-0" title="Hapus teks">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                `;
+                const textItem = createResultTextItem();
                 resultTextsContainer.appendChild(textItem);
 
                 const deleteBtn = textItem.querySelector('.delete-result-text-btn');
@@ -2565,7 +2586,7 @@ function attachResultRuleEvents(ruleCard, container) {
         if (!btn.hasAttribute('data-listener')) {
             btn.setAttribute('data-listener', 'true');
             btn.addEventListener('click', function () {
-                const textItem = this.closest('.flex.items-start.space-x-2');
+                const textItem = this.closest('.result-text-item');
                 if (textItem) {
                     textItem.remove();
                     const remaining = ruleCard.querySelectorAll('.rule-result-text');
@@ -2583,7 +2604,7 @@ function attachResultRuleEvents(ruleCard, container) {
         deleteRuleBtn.addEventListener('click', async function () {
             const dbId = ruleCard.getAttribute('data-db-id');
             const formId = getMetaContent('form-id');
-            
+
             // If form is saved and rule has database ID, delete from database
             if (formId && dbId) {
                 try {
@@ -2595,7 +2616,7 @@ function attachResultRuleEvents(ruleCard, container) {
                             'Accept': 'application/json',
                         },
                     });
-                    
+
                     const data = await response.json();
                     if (!response.ok || !data.success) {
                         throw new Error(data.message || 'Gagal menghapus aturan.');
@@ -2606,7 +2627,7 @@ function attachResultRuleEvents(ruleCard, container) {
                     return; // Don't remove from DOM if database delete failed
                 }
             }
-            
+
             // Remove from DOM
             ruleCard.remove();
             if (container.children.length === 0) {
@@ -2717,6 +2738,7 @@ function renderSavedRulesChips() {
         const rule = normalizeSavedRule(rawRule);
         const templates = Array.isArray(rule.templates) ? rule.templates : [];
         const resultRules = Array.isArray(rule.result_rules) ? rule.result_rules : [];
+        const isEditing = rule.rule_group_id && rule.rule_group_id === editingRuleGroupId;
 
         const chip = document.createElement('div');
         chip.className = 'saved-rule-chip inline-flex items-center space-x-2 px-3 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full';
@@ -2741,19 +2763,35 @@ function renderSavedRulesChips() {
         }
 
         const displayText = rule.title || descriptionParts.join(' • ');
-        chip.innerHTML = `
+
+        let buttonsHTML = `
             <span class="truncate max-w-[200px]">${displayText}</span>
-            <button type="button" class="edit-saved-rule-btn text-red-500 hover:text-red-700">
+            <button type="button" class="edit-saved-rule-btn text-blue-600 hover:text-blue-800" title="Edit Aturan">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1-1v2m-6 6l4 4 9-9-4-4-9 9z"></path>
-                </svg>
-            </button>
-            <button type="button" class="remove-saved-rule-btn text-red-500 hover:text-red-700">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
                 </svg>
             </button>
         `;
+
+        if (isEditing) {
+            buttonsHTML += `
+                <button type="button" class="dispose-saved-rule-btn text-orange-500 hover:text-orange-700" title="Tutup / Bersihkan Editor">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            `;
+        }
+
+        buttonsHTML += `
+            <button type="button" class="remove-saved-rule-btn text-red-500 hover:text-red-700" title="Hapus Aturan Permanen">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+            </button>
+        `;
+
+        chip.innerHTML = buttonsHTML;
 
         chipsWrapper.appendChild(chip);
 
@@ -2762,21 +2800,82 @@ function renderSavedRulesChips() {
             editBtn.addEventListener('click', function () {
                 hydrateRuleBuilderFromPreset(rule);
                 enterRulesEditMode(rule);
+                // Re-render to show Dispose button on this chip
+                renderSavedRulesChips();
+            });
+        }
+
+        const disposeBtn = chip.querySelector('.dispose-saved-rule-btn');
+        if (disposeBtn) {
+            disposeBtn.addEventListener('click', function () {
+                exitRulesEditMode();
+                resetFormRulesBuilder();
+                renderSavedRulesChips();
             });
         }
 
         const removeBtn = chip.querySelector('.remove-saved-rule-btn');
         if (removeBtn) {
             removeBtn.addEventListener('click', function () {
-                const indexToRemove = parseInt(chip.getAttribute('data-rule-index'), 10);
-                const current = loadSavedRules();
-                const removed = current.splice(indexToRemove, 1)[0];
-                saveRulesToState(current);
-                renderSavedRulesChips();
-                updateUseRuleButtonsVisibility();
-                if (removed && removed.rule_group_id && removed.rule_group_id === editingRuleGroupId) {
-                    exitRulesEditMode();
-                    resetFormRulesBuilder();
+                showDialog({
+                    title: 'Hapus Aturan?',
+                    message: 'Apakah Anda yakin ingin menghapus aturan ini? Tindakan ini tidak dapat dibatalkan.',
+                    type: 'danger',
+                    confirmText: 'Ya, Hapus',
+                    cancelText: 'Batal',
+                    onConfirm: () => {
+                        const formId = document.getElementById('form-builder-root')?.getAttribute('data-form-id');
+                        const ruleGroupId = rule.rule_group_id;
+
+                        if (!formId || !ruleGroupId) {
+                            removeLocalRule();
+                            return;
+                        }
+
+                        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                        fetch(`/forms/${formId}/rule-groups/${ruleGroupId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRF-TOKEN': csrfToken,
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    removeLocalRule();
+                                } else {
+                                    showDialog({
+                                        title: 'Gagal',
+                                        message: 'Gagal menghapus aturan: ' + (data.message || 'Unknown error'),
+                                        type: 'danger'
+                                    });
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                showDialog({
+                                    title: 'Error',
+                                    message: 'Terjadi kesalahan sistem saat menghapus aturan.',
+                                    type: 'danger'
+                                });
+                            });
+                    }
+                });
+
+                function removeLocalRule() {
+                    const indexToRemove = parseInt(chip.getAttribute('data-rule-index'), 10);
+                    const current = loadSavedRules();
+                    const removed = current.splice(indexToRemove, 1)[0];
+                    saveRulesToState(current);
+                    renderSavedRulesChips();
+                    updateUseRuleButtonsVisibility();
+                    if (removed && removed.rule_group_id && removed.rule_group_id === editingRuleGroupId) {
+                        exitRulesEditMode();
+                        resetFormRulesBuilder();
+                    }
                 }
             });
         }
@@ -2892,14 +2991,14 @@ function stripHTMLAndDecode(htmlString) {
     if (!htmlString || typeof htmlString !== 'string') {
         return htmlString || '';
     }
-    
+
     // Create a temporary div element
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = htmlString;
-    
+
     // Get text content (automatically strips HTML tags)
     const textContent = tempDiv.textContent || tempDiv.innerText || '';
-    
+
     // Decode HTML entities
     const textarea = document.createElement('textarea');
     textarea.innerHTML = textContent;
@@ -2917,7 +3016,9 @@ function setupBuilderResponses(options) {
     const summaryContent = document.getElementById('builder-summary-content');
     const individualEmpty = document.getElementById('builder-individual-empty');
     const individualLoading = document.getElementById('builder-individual-loading');
+    const individualToolbar = document.getElementById('builder-individual-toolbar');
     const individualContent = document.getElementById('builder-individual-content');
+    const individualList = document.getElementById('builder-individual-list');
     const responsesError = document.getElementById('builder-responses-error');
     const totalResponsesEl = document.getElementById('builder-total-responses');
     const latestResponseEl = document.getElementById('builder-latest-response');
@@ -2929,41 +3030,16 @@ function setupBuilderResponses(options) {
     const answersContainer = document.getElementById('builder-response-answers');
     const prevBtn = document.getElementById('builder-prev-response');
     const nextBtn = document.getElementById('builder-next-response');
-    const summaryTab = document.getElementById('builder-summary-tab');
-    const individualTab = document.getElementById('builder-individual-tab');
-    const exportSummaryBtn = document.getElementById('builder-export-summary');
-    const exportIndividualBtn = document.getElementById('builder-export-individual');
 
-    // Handle tab switching and toggle export buttons
-    if (summaryTab && individualTab) {
-        summaryTab.addEventListener('click', () => {
-            summaryTab.classList.add('text-red-600', 'border-red-600');
-            summaryTab.classList.remove('text-gray-500', 'border-transparent');
-            individualTab.classList.remove('text-red-600', 'border-red-600');
-            individualTab.classList.add('text-gray-500', 'border-transparent');
-            
-            if (summaryContent) summaryContent.classList.remove('hidden');
-            if (individualContent) individualContent.classList.add('hidden');
-            
-            // Toggle export buttons
-            if (exportSummaryBtn) exportSummaryBtn.classList.remove('hidden');
-            if (exportIndividualBtn) exportIndividualBtn.classList.add('hidden');
-        });
-        
-        individualTab.addEventListener('click', () => {
-            individualTab.classList.add('text-red-600', 'border-red-600');
-            individualTab.classList.remove('text-gray-500', 'border-transparent');
-            summaryTab.classList.remove('text-red-600', 'border-red-600');
-            summaryTab.classList.add('text-gray-500', 'border-transparent');
-            
-            if (individualContent) individualContent.classList.remove('hidden');
-            if (summaryContent) summaryContent.classList.add('hidden');
-            
-            // Toggle export buttons
-            if (exportIndividualBtn) exportIndividualBtn.classList.remove('hidden');
-            if (exportSummaryBtn) exportSummaryBtn.classList.add('hidden');
-        });
-    }
+    // Export Logic
+    const exportIndividualGroup = document.getElementById('builder-export-individual-group');
+    const exportIndividualDropdownBtn = document.getElementById('builder-export-individual-dropdown-btn');
+    const exportIndividualMenu = document.getElementById('builder-export-individual-menu');
+    const exportCurrentBtn = document.getElementById('builder-export-current-btn');
+
+    // View Mode Logic
+    const viewModeDetailBtn = document.getElementById('view-mode-detail');
+    const viewModeListBtn = document.getElementById('view-mode-list');
 
     if (!responsesUrl || totalResponses === 0) {
         requestBuilderResponsesData = null;
@@ -2975,6 +3051,7 @@ function setupBuilderResponses(options) {
     let summaryData = [];
     let individualData = [];
     let currentResponseIndex = 0;
+    let currentViewMode = 'detail'; // 'detail' or 'list'
 
     function setLoadingState(isLoading) {
         if (isLoading) {
@@ -2982,7 +3059,10 @@ function setupBuilderResponses(options) {
             individualLoading?.classList.remove('hidden');
             summaryContent?.classList.add('hidden');
             individualContent?.classList.add('hidden');
+            individualList?.classList.add('hidden');
+            individualToolbar?.classList.add('hidden');
             responsesError?.classList.add('hidden');
+            exportIndividualGroup?.classList.add('hidden');
         } else {
             summaryLoading?.classList.add('hidden');
             individualLoading?.classList.add('hidden');
@@ -3101,7 +3181,7 @@ function setupBuilderResponses(options) {
                         const datasetColors = item.chart.values.map((_, idx) => baseColors[idx % baseColors.length]);
                         // Strip HTML from chart labels
                         const cleanLabels = item.chart.labels.map(label => stripHTMLAndDecode(label));
-                        
+
                         new Chart(canvas, {
                             type: item.chart.type,
                             data: {
@@ -3141,6 +3221,57 @@ function setupBuilderResponses(options) {
         }
     }
 
+    function switchViewMode(mode) {
+        currentViewMode = mode;
+        if (mode === 'list') {
+            viewModeListBtn?.classList.add('bg-white', 'text-red-600', 'shadow-sm');
+            viewModeListBtn?.classList.remove('text-gray-500');
+            viewModeDetailBtn?.classList.remove('bg-white', 'text-red-600', 'shadow-sm');
+            viewModeDetailBtn?.classList.add('text-gray-500');
+
+            individualContent?.classList.add('hidden');
+            individualList?.classList.remove('hidden');
+            renderResponsesList();
+        } else {
+            viewModeDetailBtn?.classList.add('bg-white', 'text-red-600', 'shadow-sm');
+            viewModeDetailBtn?.classList.remove('text-gray-500');
+            viewModeListBtn?.classList.remove('bg-white', 'text-red-600', 'shadow-sm');
+            viewModeListBtn?.classList.add('text-gray-500');
+
+            individualList?.classList.add('hidden');
+            individualContent?.classList.remove('hidden');
+            renderIndividualResponse(currentResponseIndex);
+        }
+    }
+
+    function renderResponsesList() {
+        if (!individualList) return;
+        individualList.innerHTML = '';
+
+        individualData.forEach((response, index) => {
+            const card = document.createElement('div');
+            card.className = 'bg-white border border-gray-100 rounded-xl p-5 shadow-sm hover:border-red-300 hover:shadow-md transition-all cursor-pointer group';
+            card.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-gray-500">Jawaban ke-${response.position || (index + 1)}</p>
+                        <p class="text-lg font-bold text-gray-900 group-hover:text-red-600 transition-colors">${response.email || 'Anonim'}</p>
+                        <p class="text-sm text-gray-400">${response.submitted_at || '-'}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider">Skor Total</p>
+                        <p class="text-2xl font-black text-gray-900">${response.total_score ?? 0}</p>
+                    </div>
+                </div>
+            `;
+            card.addEventListener('click', () => {
+                currentResponseIndex = index;
+                switchViewMode('detail');
+            });
+            individualList.appendChild(card);
+        });
+    }
+
     function renderIndividualResponse(index) {
         if (!answersContainer) {
             return;
@@ -3151,7 +3282,7 @@ function setupBuilderResponses(options) {
         }
 
         if (positionEl) {
-            positionEl.textContent = index + 1;
+            positionEl.textContent = data.position || (index + 1);
         }
         if (emailEl) {
             emailEl.textContent = data.email || 'Anonim';
@@ -3202,15 +3333,51 @@ function setupBuilderResponses(options) {
         }
 
         if (!individualData.length) {
-            individualContent.classList.add('hidden');
             individualEmpty?.classList.remove('hidden');
+            individualToolbar?.classList.add('hidden');
+            individualContent?.classList.add('hidden');
+            individualList?.classList.add('hidden');
+            exportIndividualGroup?.classList.add('hidden');
             return;
         }
 
         individualEmpty?.classList.add('hidden');
-        individualContent.classList.remove('hidden');
-        currentResponseIndex = 0;
-        renderIndividualResponse(currentResponseIndex);
+        individualToolbar?.classList.remove('hidden');
+        exportIndividualGroup?.classList.remove('hidden');
+
+        switchViewMode(currentViewMode);
+    }
+
+    // List view and Export listeners
+    if (viewModeDetailBtn) {
+        viewModeDetailBtn.addEventListener('click', () => switchViewMode('detail'));
+    }
+    if (viewModeListBtn) {
+        viewModeListBtn.addEventListener('click', () => switchViewMode('list'));
+    }
+
+    if (exportIndividualDropdownBtn) {
+        exportIndividualDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            exportIndividualMenu?.classList.toggle('hidden');
+        });
+        document.addEventListener('click', () => {
+            exportIndividualMenu?.classList.add('hidden');
+        });
+    }
+
+    if (exportCurrentBtn) {
+        exportCurrentBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const response = individualData[currentResponseIndex];
+            if (!response || !response.id) return;
+
+            const formId = document.getElementById('form-builder-root')?.getAttribute('data-form-id');
+            if (!formId) return;
+
+            // Redirect to single export route
+            window.location.href = `/forms/${formId}/export-individual-single/${response.id}`;
+        });
     }
 
     if (prevBtn) {
@@ -3320,16 +3487,21 @@ function applySavedRuleToQuestion(questionCard, savedRule) {
 
     const badge = document.createElement('span');
     badge.className = 'inline-flex items-center px-3 py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-full space-x-2';
-    const parts = [];
-    const resultRules = Array.isArray(rule.result_rules) ? rule.result_rules : [];
-    if (templates.length) {
-        parts.push(`${templates.length} opsi`);
+    let label = rule.title;
+    if (!label) {
+        const parts = [];
+        const resultRules = Array.isArray(rule.result_rules) ? rule.result_rules : [];
+        if (templates.length) {
+            parts.push(`${templates.length} opsi`);
+        }
+        if (resultRules.length) {
+            parts.push(`${resultRules.length} hasil`);
+        }
+        label = parts.join(' • ');
     }
-    if (resultRules.length) {
-        parts.push(`${resultRules.length} hasil`);
-    }
+
     badge.innerHTML = `
-        <span>Aturan: ${parts.join(' • ')}</span>
+        <span>Aturan: ${label}</span>
         <button type="button" class="remove-applied-rule text-red-500 hover:text-red-700">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -3424,14 +3596,18 @@ function attachSavedRuleButtons() {
                     option.type = 'button';
                     option.className = 'w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md';
                     const normalized = normalizeSavedRule(bundle);
-                    const parts = [];
-                    if (normalized.templates?.length) {
-                        parts.push(`${normalized.templates.length} opsi`);
+                    if (normalized.title) {
+                        option.textContent = normalized.title;
+                    } else {
+                        const parts = [];
+                        if (normalized.templates?.length) {
+                            parts.push(`${normalized.templates.length} opsi`);
+                        }
+                        if (normalized.result_rules?.length) {
+                            parts.push(`${normalized.result_rules.length} hasil`);
+                        }
+                        option.textContent = parts.join(' • ') || `Aturan ${index + 1}`;
                     }
-                    if (normalized.result_rules?.length) {
-                        parts.push(`${normalized.result_rules.length} hasil`);
-                    }
-                    option.textContent = parts.join(' • ') || `Aturan ${index + 1}`;
                     option.addEventListener('click', () => {
                         applySavedRuleToQuestion(card, normalized);
                         menu.remove();
@@ -3461,16 +3637,16 @@ function attachSavedRuleButtons() {
 }
 
 // Event Listeners
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Initialize tabs
     initTabs();
-    
+
     // Initialize card formatting toolbar
     initCardFormattingToolbar();
-    
+
     // Initialize header setup
     initHeaderSetup();
-    
+
     const rootElement = document.getElementById('form-builder-root');
     let initialData = null;
     let formMode = 'create';
@@ -3524,7 +3700,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateShareButtonVisibility();
 
     if (shareLinkBtn) {
-        shareLinkBtn.addEventListener('click', async function() {
+        shareLinkBtn.addEventListener('click', async function () {
             if (shareLinkUrl) {
                 // Langsung copy link ke clipboard saat tombol diklik
                 try {
@@ -3556,19 +3732,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const themeColorButtons = document.querySelectorAll('[data-theme-color]');
     themeColorButtons.forEach((button) => {
-        button.addEventListener('click', function() {
+        button.addEventListener('click', function () {
             const color = this.getAttribute('data-theme-color');
             updateThemeColorSelection(color);
         });
     });
-    
+
     if (formMode === 'edit') {
         const saveBtnLabel = document.querySelector('#save-form-btn span');
         if (saveBtnLabel) {
             saveBtnLabel.textContent = 'Update Form';
         }
     }
-    
+
     if (initialData) {
         if (initialData.saved_rules) {
             saveRulesToState(initialData.saved_rules);
@@ -3578,19 +3754,19 @@ document.addEventListener('DOMContentLoaded', function() {
         updateThemeColorSelection('red');
         updateMainButtonsVisibility();
     }
-    
+
     updateRuleSaveControlsVisibility();
     setupBuilderResponses({
         responsesUrl: responsesDataUrl,
         totalResponses: totalResponsesHint,
     });
-    
+
     // Initialize answer templates
     const addAnswerTemplateBtn = document.getElementById('add-answer-template-btn');
     const answerTemplatesContainer = document.getElementById('answer-templates-container');
-    
+
     if (addAnswerTemplateBtn && answerTemplatesContainer) {
-        addAnswerTemplateBtn.addEventListener('click', function() {
+        addAnswerTemplateBtn.addEventListener('click', function () {
             if (answerTemplatesContainer.querySelector('.answer-templates-placeholder')) {
                 answerTemplatesContainer.innerHTML = '';
             }
@@ -3598,7 +3774,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateRuleSaveControlsVisibility();
         });
     }
-    
+
     const saveRulesBtn = document.getElementById('save-form-rules-btn');
     const cancelRulesBtn = document.getElementById('cancel-form-rules-btn');
     defaultSaveRulesLabel = saveRulesBtn?.textContent?.trim() || defaultSaveRulesLabel;
@@ -3613,7 +3789,7 @@ document.addEventListener('DOMContentLoaded', function() {
     exitRulesEditMode();
 
     if (saveRulesBtn) {
-        saveRulesBtn.addEventListener('click', async function() {
+        saveRulesBtn.addEventListener('click', async function () {
             if (!formRulesSaveUrl) {
                 alert('Simpan form terlebih dahulu sebelum menyimpan aturan.');
                 return;
@@ -3694,31 +3870,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
     renderSavedRulesChips();
     updateUseRuleButtonsVisibility();
-    
+
     // Initialize result rules
     const addResultRuleBtn = document.getElementById('add-result-rule-btn');
     const resultRulesContainer = document.getElementById('result-rules-container');
-    
+
     if (addResultRuleBtn && resultRulesContainer) {
-        addResultRuleBtn.addEventListener('click', function() {
+        addResultRuleBtn.addEventListener('click', function () {
             if (resultRulesContainer.querySelector('.result-rules-placeholder')) {
                 resultRulesContainer.innerHTML = '';
             }
             appendResultRuleCard(resultRulesContainer);
         });
     }
-    
+
     const addQuestionBtn = document.getElementById('add-question-btn');
     const questionTypesMenu = document.getElementById('question-types-menu');
     const questionsContainer = document.getElementById('questions-container');
     const questionTypeButtons = document.querySelectorAll('.question-type-btn');
-    
+
     // Langsung tambahkan pertanyaan default saat klik tombol
-    
+
     // Sama seperti quick-add button di dalam kartu
     if (addQuestionBtn && !addQuestionBtn.hasAttribute('data-listener')) {
         addQuestionBtn.setAttribute('data-listener', 'true');
-        addQuestionBtn.addEventListener('click', function(e) {
+        addQuestionBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             const questionCard = createQuestionCard('short-answer');
             questionsContainer.appendChild(questionCard);
@@ -3726,7 +3902,7 @@ document.addEventListener('DOMContentLoaded', function() {
             attachQuestionCardEvents(questionCard);
             initSortable();
             updateMainButtonsVisibility();
-            
+
             // Focus ke input pertanyaan
             setTimeout(() => {
                 const titleInput = questionCard.querySelector('.question-title');
@@ -3736,46 +3912,46 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 100);
         });
     }
-    
+
     // Tambahkan section divider
     const addSectionBtn = document.getElementById('add-section-btn');
     if (addSectionBtn) {
-        addSectionBtn.addEventListener('click', function() {
+        addSectionBtn.addEventListener('click', function () {
             const sectionDivider = createSectionDivider();
             questionsContainer.appendChild(sectionDivider);
             attachSectionEvents(sectionDivider);
-            
+
             // Attach delete event
             const deleteBtn = sectionDivider.querySelector('.delete-section-btn');
             if (deleteBtn) {
-                deleteBtn.addEventListener('click', function() {
+                deleteBtn.addEventListener('click', function () {
                     sectionDivider.remove();
                     updateSectionNumbers();
                     updateMainButtonsVisibility();
                 });
             }
-            
+
             initSortable();
             updateMainButtonsVisibility();
         });
     }
-    
+
     // Initial check for main buttons visibility
     updateMainButtonsVisibility();
-    
+
     // Tutup menu saat klik di luar (untuk modal yang mungkin masih digunakan di tempat lain)
     if (questionTypesMenu) {
-        questionTypesMenu.addEventListener('click', function(e) {
+        questionTypesMenu.addEventListener('click', function (e) {
             if (e.target === questionTypesMenu) {
                 questionTypesMenu.classList.add('hidden');
                 questionTypesMenu.classList.remove('flex', 'items-center', 'justify-center');
             }
         });
     }
-    
+
     // Handle pemilihan jenis pertanyaan dari modal (jika masih digunakan)
     questionTypeButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             const type = this.getAttribute('data-type');
             const questionCard = createQuestionCard(type);
             questionsContainer.appendChild(questionCard);
@@ -3784,19 +3960,19 @@ document.addEventListener('DOMContentLoaded', function() {
             updateQuestionNumbers();
             attachQuestionCardEvents(questionCard);
             initSortable();
-            
+
         });
     });
-    
+
     // Attach events untuk question cards yang sudah ada
     document.querySelectorAll('.question-card').forEach(card => {
         attachQuestionCardEvents(card);
     });
-    
+
     // Save Form Button
     const saveFormBtn = document.getElementById('save-form-btn');
     if (saveFormBtn) {
-        saveFormBtn.addEventListener('click', function() {
+        saveFormBtn.addEventListener('click', function () {
             const originalButtonHtml = saveFormBtn.getAttribute('data-original-html') || saveFormBtn.innerHTML;
             saveFormBtn.setAttribute('data-original-html', originalButtonHtml);
 
@@ -3807,13 +3983,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 </svg>
                 <span class="text-sm font-medium">Menyimpan...</span>
             `;
-            
+
             const formData = collectFormData({ includeRules: false });
             const csrfToken = getMetaContent('csrf-token');
 
             const savedRules = loadSavedRules();
             formData.saved_rules = savedRules;
-            
+
             // Debug: log result_text_settings and text_formatting
             console.log('[FormBuilder] Saving form data:', {
                 result_text_settings_count: formData.result_text_settings?.length || 0,
@@ -3821,7 +3997,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 text_formatting_count: formData.text_formatting?.length || 0,
                 text_formatting: formData.text_formatting,
             });
-            
+
             fetch(saveFormUrl, {
                 method: saveFormMethod,
                 headers: {
@@ -3832,65 +4008,65 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify(formData)
             })
-            .then(async (response) => {
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok || !data.success) {
-                    const message = data && data.message ? data.message : 'Gagal menyimpan form.';
-                    throw new Error(message);
-                }
-                return data;
-            })
-            .then(data => {
-                if (data.form_id) {
-                    formId = data.form_id;
-                    setMetaContent('form-id', formId);
-                    if (rootElement) {
-                        rootElement.setAttribute('data-form-id', formId);
+                .then(async (response) => {
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok || !data.success) {
+                        const message = data && data.message ? data.message : 'Gagal menyimpan form.';
+                        throw new Error(message);
                     }
-                }
-
-                if (data.update_url) {
-                    saveFormUrl = data.update_url;
-                    setMetaContent('save-form-url', saveFormUrl);
-                }
-
-                if (data.save_method) {
-                    saveFormMethod = data.save_method.toUpperCase();
-                    setMetaContent('save-form-method', saveFormMethod);
-                } else if (saveFormMethod !== 'PUT') {
-                    saveFormMethod = 'PUT';
-                    setMetaContent('save-form-method', 'PUT');
-                }
-
-                if (data.share_url) {
-                    shareLinkUrl = data.share_url;
-                    if (rootElement) {
-                        rootElement.setAttribute('data-share-url', shareLinkUrl);
+                    return data;
+                })
+                .then(data => {
+                    if (data.form_id) {
+                        formId = data.form_id;
+                        setMetaContent('form-id', formId);
+                        if (rootElement) {
+                            rootElement.setAttribute('data-form-id', formId);
+                        }
                     }
-                    updateShareButtonVisibility();
-                }
 
-                if (data.form_rules_save_url) {
-                    formRulesSaveUrl = data.form_rules_save_url;
-                    setMetaContent('form-rules-save-url', data.form_rules_save_url);
-                }
+                    if (data.update_url) {
+                        saveFormUrl = data.update_url;
+                        setMetaContent('save-form-url', saveFormUrl);
+                    }
 
-                formMode = 'edit';
-                const saveBtnLabel = saveFormBtn.querySelector('span');
-                if (saveBtnLabel) {
-                    saveBtnLabel.textContent = 'Update Form';
-                }
+                    if (data.save_method) {
+                        saveFormMethod = data.save_method.toUpperCase();
+                        setMetaContent('save-form-method', saveFormMethod);
+                    } else if (saveFormMethod !== 'PUT') {
+                        saveFormMethod = 'PUT';
+                        setMetaContent('save-form-method', 'PUT');
+                    }
 
-                showSuccessDialog(data.message || 'Form berhasil disimpan!');
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert(error.message || 'Terjadi kesalahan saat menyimpan form. Silakan coba lagi.');
-            })
-            .finally(() => {
-                saveFormBtn.disabled = false;
-                saveFormBtn.innerHTML = saveFormBtn.getAttribute('data-original-html') || originalButtonHtml;
-            });
+                    if (data.share_url) {
+                        shareLinkUrl = data.share_url;
+                        if (rootElement) {
+                            rootElement.setAttribute('data-share-url', shareLinkUrl);
+                        }
+                        updateShareButtonVisibility();
+                    }
+
+                    if (data.form_rules_save_url) {
+                        formRulesSaveUrl = data.form_rules_save_url;
+                        setMetaContent('form-rules-save-url', data.form_rules_save_url);
+                    }
+
+                    formMode = 'edit';
+                    const saveBtnLabel = saveFormBtn.querySelector('span');
+                    if (saveBtnLabel) {
+                        saveBtnLabel.textContent = 'Update Form';
+                    }
+
+                    showSuccessDialog(data.message || 'Form berhasil disimpan!');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(error.message || 'Terjadi kesalahan saat menyimpan form. Silakan coba lagi.');
+                })
+                .finally(() => {
+                    saveFormBtn.disabled = false;
+                    saveFormBtn.innerHTML = saveFormBtn.getAttribute('data-original-html') || originalButtonHtml;
+                });
         });
     }
 });
@@ -3901,18 +4077,18 @@ function attachQuestionCardEvents(card) {
     const deleteBtn = card.querySelector('.delete-question-btn');
     if (deleteBtn && !deleteBtn.hasAttribute('data-listener')) {
         deleteBtn.setAttribute('data-listener', 'true');
-        deleteBtn.addEventListener('click', function() {
+        deleteBtn.addEventListener('click', function () {
             card.remove();
             updateQuestionNumbers();
             updateMainButtonsVisibility();
         });
     }
-    
+
     // Duplicate question
     const duplicateBtn = card.querySelector('.duplicate-question-btn');
     if (duplicateBtn && !duplicateBtn.hasAttribute('data-listener')) {
         duplicateBtn.setAttribute('data-listener', 'true');
-        duplicateBtn.addEventListener('click', function() {
+        duplicateBtn.addEventListener('click', function () {
             const type = card.getAttribute('data-question-type');
             const newCard = createQuestionCard(type);
             const titleElement = card.querySelector('.question-title');
@@ -3933,12 +4109,12 @@ function attachQuestionCardEvents(card) {
             updateMainButtonsVisibility();
         });
     }
-    
+
     // More options panel
     const moreOptionsBtn = card.querySelector('.more-options-btn');
     const advancedSettings = card.querySelector('.question-advanced-settings');
     if (moreOptionsBtn && advancedSettings) {
-        moreOptionsBtn.addEventListener('click', function(e) {
+        moreOptionsBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             advancedSettings.classList.toggle('hidden');
         });
@@ -3948,38 +4124,38 @@ function attachQuestionCardEvents(card) {
     const typeDropdownBtn = card.querySelector('.question-type-dropdown-btn');
     const typeDropdown = card.querySelector('.question-type-dropdown');
     if (typeDropdownBtn && typeDropdown) {
-        typeDropdownBtn.addEventListener('click', function(e) {
+        typeDropdownBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             typeDropdown.classList.toggle('hidden');
         });
-        
+
         // Close dropdown saat klik di luar
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             if (!typeDropdownBtn.contains(e.target) && !typeDropdown.contains(e.target)) {
                 typeDropdown.classList.add('hidden');
             }
         });
-        
+
         // Change question type
         const changeTypeBtns = card.querySelectorAll('.change-question-type-btn');
         changeTypeBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const newType = this.getAttribute('data-type');
                 const template = questionTemplates[newType];
                 const inputArea = card.querySelector('.question-input-area');
                 inputArea.innerHTML = template.input;
-                
+
                 // Update icon and label
                 const iconEl = card.querySelector('.question-type-icon');
                 const labelEl = card.querySelector('.question-type-label');
                 if (iconEl) iconEl.innerHTML = template.icon;
                 if (labelEl) labelEl.textContent = template.label;
-                
+
                 card.setAttribute('data-question-type', newType);
                 typeDropdown.classList.add('hidden');
-                
+
                 attachOptionEvents(card);
-                
+
                 if (newType !== 'multiple-choice') {
                     const wrapper = card.querySelector('.use-saved-rules-wrapper');
                     if (wrapper) {
@@ -4001,16 +4177,16 @@ function attachQuestionCardEvents(card) {
             });
         });
     }
-    
+
     // Attach option events
     attachOptionEvents(card);
-    
+
     // Quick add buttons
     const quickAddButtons = card.querySelector('.question-quick-add-buttons');
     const quickAddQuestionBtn = card.querySelector('.quick-add-question-btn');
     const quickAddSectionBtn = card.querySelector('.quick-add-section-btn');
     const quickAddResultSettingBtn = card.querySelector('.quick-add-result-setting-btn');
-    
+
     const hasResultRules = () => {
         const resultRulesContainer = document.getElementById('result-rules-container');
         if (!resultRulesContainer) return false;
@@ -4018,7 +4194,7 @@ function attachQuestionCardEvents(card) {
         const ruleCards = resultRulesContainer.querySelectorAll('.result-rule-card');
         return !placeholder && ruleCards.length > 0;
     };
-    
+
     // Function to show/hide quick add buttons
     const showQuickAddButtons = () => {
         if (quickAddButtons) {
@@ -4035,17 +4211,17 @@ function attachQuestionCardEvents(card) {
             }
         }
     };
-    
+
     const hideQuickAddButtons = () => {
         if (quickAddButtons) {
             quickAddButtons.classList.add('hidden');
         }
     };
-    
+
     // Quick add question button
     if (quickAddQuestionBtn && !quickAddQuestionBtn.hasAttribute('data-listener')) {
         quickAddQuestionBtn.setAttribute('data-listener', 'true');
-        quickAddQuestionBtn.addEventListener('click', function(e) {
+        quickAddQuestionBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             const questionsContainer = document.getElementById('questions-container');
             if (questionsContainer) {
@@ -4055,7 +4231,7 @@ function attachQuestionCardEvents(card) {
                 attachQuestionCardEvents(questionCard);
                 initSortable();
                 updateMainButtonsVisibility();
-                
+
                 setTimeout(() => {
                     const titleInput = questionCard.querySelector('.question-title');
                     if (titleInput) {
@@ -4068,7 +4244,7 @@ function attachQuestionCardEvents(card) {
 
     if (quickAddResultSettingBtn && !quickAddResultSettingBtn.hasAttribute('data-listener')) {
         quickAddResultSettingBtn.setAttribute('data-listener', 'true');
-        quickAddResultSettingBtn.addEventListener('click', function(e) {
+        quickAddResultSettingBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             const questionsContainer = document.getElementById('questions-container');
             if (!questionsContainer) {
@@ -4085,36 +4261,36 @@ function attachQuestionCardEvents(card) {
             resultSettingCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
     }
-    
+
     // Quick add section button
     if (quickAddSectionBtn) {
-        quickAddSectionBtn.addEventListener('click', function(e) {
+        quickAddSectionBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             const questionsContainer = document.getElementById('questions-container');
             if (questionsContainer) {
                 const sectionDivider = createSectionDivider();
                 questionsContainer.insertBefore(sectionDivider, card.nextSibling);
                 attachSectionEvents(sectionDivider);
-                
+
                 const deleteBtn = sectionDivider.querySelector('.delete-section-btn');
                 if (deleteBtn) {
-                    deleteBtn.addEventListener('click', function() {
+                    deleteBtn.addEventListener('click', function () {
                         sectionDivider.remove();
                         updateSectionNumbers();
                         updateMainButtonsVisibility();
                     });
                 }
-                
+
                 initSortable();
                 updateMainButtonsVisibility();
             }
         });
     }
-    
+
     // Active state highlight saat focus pada input pertanyaan
     const questionTitle = card.querySelector('.question-title');
     if (questionTitle) {
-        questionTitle.addEventListener('focus', function() {
+        questionTitle.addEventListener('focus', function () {
             // Remove active dari semua cards
             document.querySelectorAll('.question-card').forEach(c => {
                 c.classList.remove('ring-2', 'ring-red-600', 'border-red-600');
@@ -4130,9 +4306,9 @@ function attachQuestionCardEvents(card) {
             showQuickAddButtons();
         });
     }
-    
+
     // Click pada card juga trigger highlight
-    card.addEventListener('click', function(e) {
+    card.addEventListener('click', function (e) {
         const shouldSkipFocus = e.target.closest('button')
             || e.target.closest('input')
             || e.target.closest('textarea')
@@ -4155,7 +4331,7 @@ function attachQuestionCardEvents(card) {
                 quickAdd.classList.add('hidden');
             }
         });
-        
+
         // Add active ke card ini
         card.classList.add('ring-2', 'ring-red-600', 'border-red-600');
         card.classList.remove('border-gray-200');
@@ -4165,41 +4341,16 @@ function attachQuestionCardEvents(card) {
             questionTitle.focus();
         }
     });
-    
+
     // Hide quick add buttons when clicking outside
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', function (e) {
         if (!card.contains(e.target)) {
             hideQuickAddButtons();
         }
     });
-    
-    // Required checkbox toggle - ensure it's clickable
-    const requiredCheckbox = card.querySelector('.required-checkbox');
-    const toggleSwitch = card.querySelector('.toggle-switch');
-    const toggleHandle = card.querySelector('.toggle-switch-handle');
-    
-    if (requiredCheckbox && toggleSwitch && toggleHandle) {
-        function updateToggleState() {
-            toggleSwitch.classList.toggle('bg-red-600', requiredCheckbox.checked);
-            toggleSwitch.classList.toggle('bg-gray-300', !requiredCheckbox.checked);
-            toggleHandle.classList.toggle('translate-x-5', requiredCheckbox.checked);
-        }
 
-        updateToggleState();
 
-        requiredCheckbox.addEventListener('change', function () {
-            updateToggleState();
-        });
 
-        [toggleSwitch, toggleHandle].forEach((element) => {
-            element.addEventListener('click', function (event) {
-                event.preventDefault();
-                requiredCheckbox.checked = !requiredCheckbox.checked;
-                updateToggleState();
-            });
-        });
-    }
-    
     // Add image button
     const addImageBtn = card.querySelector('.add-image-btn');
     const imageFileInput = card.querySelector('.image-file-input');
@@ -4240,19 +4391,19 @@ function attachQuestionCardEvents(card) {
     if (widthRange) {
         widthRange.addEventListener('input', updateImageWidthDisplay);
     }
-    
+
     if (addImageBtn && imageFileInput) {
-        addImageBtn.addEventListener('click', function() {
+        addImageBtn.addEventListener('click', function () {
             imageFileInput.click();
         });
     }
-    
+
     if (imageFileInput) {
-        imageFileInput.addEventListener('change', function(e) {
+        imageFileInput.addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
-                reader.onload = function(e) {
+                reader.onload = function (e) {
                     if (questionImage) {
                         questionImage.src = e.target.result;
                     }
@@ -4265,9 +4416,9 @@ function attachQuestionCardEvents(card) {
             }
         });
     }
-    
+
     if (questionImage) {
-        questionImage.addEventListener('error', function() {
+        questionImage.addEventListener('error', function () {
             questionImage.removeAttribute('src');
             hideImageControls();
             if (imageValueInput) {
@@ -4275,9 +4426,9 @@ function attachQuestionCardEvents(card) {
             }
         });
     }
-    
+
     if (removeImageBtn) {
-        removeImageBtn.addEventListener('click', function() {
+        removeImageBtn.addEventListener('click', function () {
             hideImageControls();
             if (questionImage) {
                 questionImage.src = '';
@@ -4315,7 +4466,7 @@ function attachOptionEvents(card) {
     removeOptionBtns.forEach(btn => {
         if (!btn.hasAttribute('data-listener')) {
             btn.setAttribute('data-listener', 'true');
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const optionItem = this.closest('.option-item');
                 if (optionItem) {
                     optionItem.remove();
@@ -4323,20 +4474,20 @@ function attachOptionEvents(card) {
             });
         }
     });
-    
+
     // Show remove button on hover untuk option items
     const optionItems = card.querySelectorAll('.option-item');
     optionItems.forEach(item => {
         if (!item.hasAttribute('data-hover-listener')) {
             item.setAttribute('data-hover-listener', 'true');
-            item.addEventListener('mouseenter', function() {
+            item.addEventListener('mouseenter', function () {
                 const removeBtn = this.querySelector('.remove-option-btn');
                 if (removeBtn) {
                     removeBtn.classList.remove('opacity-0');
                     removeBtn.classList.add('opacity-100');
                 }
             });
-            item.addEventListener('mouseleave', function() {
+            item.addEventListener('mouseleave', function () {
                 const removeBtn = this.querySelector('.remove-option-btn');
                 if (removeBtn) {
                     removeBtn.classList.add('opacity-0');
@@ -4345,13 +4496,13 @@ function attachOptionEvents(card) {
             });
         }
     });
-    
+
     // Add option button
     const addOptionBtns = card.querySelectorAll('.add-option-btn');
     addOptionBtns.forEach(btn => {
         if (!btn.hasAttribute('data-listener')) {
             btn.setAttribute('data-listener', 'true');
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const container = card.querySelector('[data-option-container="true"]');
                 const controls = card.querySelector('.option-controls');
                 if (!container) {
@@ -4372,13 +4523,13 @@ function attachOptionEvents(card) {
             });
         }
     });
-    
+
     // Add "Lainnya" button
     const addOtherBtns = card.querySelectorAll('.add-other-btn');
     addOtherBtns.forEach(btn => {
         if (!btn.hasAttribute('data-listener')) {
             btn.setAttribute('data-listener', 'true');
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const container = card.querySelector('[data-option-container="true"]');
                 if (!container) {
                     return;
@@ -4437,6 +4588,8 @@ function collectFormData(options = {}) {
         finalTitle = truncatedPlain;
     }
 
+    const useBmiFormula = document.getElementById('use-bmi-formula')?.checked || false;
+
     const formData = {
         title: finalTitle || 'Formulir tanpa judul',
         description: getHTMLFromContentEditable(document.getElementById('form-description')) || '',
@@ -4447,13 +4600,32 @@ function collectFormData(options = {}) {
         collect_email: document.querySelectorAll('#tab-settings input[type="checkbox"]')[0]?.checked || false,
         limit_one_response: document.querySelectorAll('#tab-settings input[type="checkbox"]')[1]?.checked || false,
         show_progress_bar: document.querySelectorAll('#tab-settings input[type="checkbox"]')[2]?.checked || false,
-        shuffle_questions: document.querySelectorAll('#tab-settings input[type="checkbox"]')[3]?.checked || false,
+        shuffle_questions: document.getElementById('shuffle-questions')?.checked || false,
+        use_bmi_formula: useBmiFormula,
+        bmi_mapping: {},
         sections: [],
         questions: [],
         answer_templates: [],
         result_rules: [],
-        result_text_settings: [] // Struktur baru untuk result text settings
+        result_text_settings: [], // Struktur baru untuk result text settings
+        text_formatting: []
     };
+
+    // Auto-map BMI questions if enabled
+    if (useBmiFormula) {
+        const questionCards = document.querySelectorAll('.question-card');
+        questionCards.forEach(card => {
+            const titleInput = card.querySelector('.question-title');
+            const title = (titleInput ? (titleInput.contentEditable === 'true' ? titleInput.innerText : titleInput.value) : '').trim().toLowerCase();
+            const dbId = card.getAttribute('data-db-id');
+
+            if (title === 'berat badan (kg)') {
+                formData.bmi_mapping.weight_question_id = dbId;
+            } else if (title === 'tinggi badan (cm)') {
+                formData.bmi_mapping.height_question_id = dbId;
+            }
+        });
+    }
 
     // Collect sections
     const sections = document.querySelectorAll('.section-divider');
@@ -4463,20 +4635,23 @@ function collectFormData(options = {}) {
         const imageValueInput = section.querySelector('.section-image-value');
         const alignmentSelect = section.querySelector('.section-image-alignment-select');
         const wrapModeSelect = section.querySelector('.section-image-wrap-mode-select');
-        
+
         formData.sections.push({
+            id: section.getAttribute('data-db-id') || null,
             title: getHTMLFromContentEditable(titleInput)?.trim() || null,
             description: getHTMLFromContentEditable(descInput)?.trim() || null,
             image: imageValueInput?.value?.trim() || null,
             image_alignment: alignmentSelect?.value || 'center',
             image_wrap_mode: wrapModeSelect?.value || 'fixed',
+            calculate_subtotal: section.querySelector('.calculate-subtotal-checkbox')?.checked || false,
+            include_in_total: section.querySelector('.include-in-total-checkbox')?.checked || true,
         });
     });
 
     if (includeRules) {
         // Generate rule_group_id untuk mengelompokkan semua aturan form yang satu paket
         const generateRuleGroupId = () => {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
                 const r = Math.random() * 16 | 0;
                 const v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
@@ -4488,7 +4663,7 @@ function collectFormData(options = {}) {
         const resultRulesElements = document.querySelectorAll('.result-rule-card');
         const hasAnswerTemplates = answerTemplates.length > 0;
         const hasResultRules = resultRulesElements.length > 0;
-        
+
         // Cari rule_group_id yang sudah ada dari card pertama (jika edit mode)
         let existingRuleGroupId = null;
         if (answerTemplates.length > 0) {
@@ -4501,7 +4676,7 @@ function collectFormData(options = {}) {
                 existingRuleGroupId = firstRule.getAttribute('data-rule-group-id');
             }
         }
-        
+
         // Gunakan rule_group_id yang sudah ada jika ada, atau generate baru
         const ruleGroupId = existingRuleGroupId || ((hasAnswerTemplates || hasResultRules) ? generateRuleGroupId() : null);
 
@@ -4510,6 +4685,7 @@ function collectFormData(options = {}) {
             const score = template.querySelector('.answer-template-score')?.value || 0;
             if (answerText) {
                 formData.answer_templates.push({
+                    id: template.getAttribute('data-db-id') || null,
                     answer_text: answerText,
                     score: parseInt(score) || 0,
                     rule_group_id: ruleGroupId
@@ -4522,6 +4698,7 @@ function collectFormData(options = {}) {
         resultRules.forEach((ruleCard) => {
             const conditionType = ruleCard.querySelector('.rule-condition-type')?.value || 'range';
             const ruleData = {
+                id: ruleCard.getAttribute('data-db-id') || null,
                 condition_type: conditionType,
                 texts: [],
                 rule_group_id: ruleGroupId
@@ -4535,10 +4712,15 @@ function collectFormData(options = {}) {
             }
 
             // Collect result texts
-            const textAreas = ruleCard.querySelectorAll('.rule-result-text');
-            textAreas.forEach((textarea) => {
-                if (textarea.value.trim()) {
-                    ruleData.texts.push(textarea.value.trim());
+            const textContainers = ruleCard.querySelectorAll('.rule-result-texts .result-text-item');
+            textContainers.forEach((container) => {
+                const textarea = container.querySelector('.rule-result-text');
+                const dbId = container.getAttribute('data-db-id');
+                if (textarea && textarea.value.trim()) {
+                    ruleData.texts.push({
+                        id: dbId || null,
+                        result_text: textarea.value.trim()
+                    });
                 }
             });
 
@@ -4553,10 +4735,10 @@ function collectFormData(options = {}) {
     if (!questionsContainer) {
         return formData;
     }
-    
+
     const questions = questionsContainer.querySelectorAll('.question-card, .section-divider');
     let currentSectionIndex = -1;
-    
+
     questions.forEach((questionCard) => {
         // Check if this is a section divider
         if (questionCard.classList.contains('section-divider')) {
@@ -4585,6 +4767,7 @@ function collectFormData(options = {}) {
         }
 
         const questionData = {
+            id: questionCard.getAttribute('data-db-id') || null,
             type: questionCard.getAttribute('data-question-type') || 'short-answer',
             title: getHTMLFromContentEditable(questionCard.querySelector('.question-title')) || '',
             description: questionCard.querySelector('.question-description')?.value || '',
@@ -4637,6 +4820,7 @@ function collectFormData(options = {}) {
                         : null;
 
                     questionData.options.push({
+                        id: optionItem.getAttribute('data-db-id') || null,
                         text: optionText.trim(),
                         answer_template_index: Number.isInteger(templateIndex) ? templateIndex : null,
                     });
@@ -4661,11 +4845,11 @@ function collectFormData(options = {}) {
             formData.questions.push(questionData);
         }
     });
-    
+
     // Collect result settings and result text settings (new structure)
     // Get all items in order (questions, sections, result settings) to calculate correct position
     const allItems = Array.from(questionsContainer.querySelectorAll('.question-card, .section-divider, .result-setting-card'));
-    
+
     // Collect result setting cards with their position index
     const resultSettingCards = [];
     allItems.forEach((item, index) => {
@@ -4673,34 +4857,34 @@ function collectFormData(options = {}) {
             resultSettingCards.push({ card: item, position: index });
         }
     });
-    
+
     // Process each result setting card
     resultSettingCards.forEach(({ card, position }) => {
         const ruleSelect = card.querySelector('.result-setting-rule-select');
         const textAlignmentSelect = card.querySelector('.result-setting-text-alignment-select');
         const imageAlignmentSelect = card.querySelector('.result-setting-image-alignment-select');
         const imageValueInput = card.querySelector('.result-setting-image-value');
-        
+
         const selectedOption = ruleSelect?.selectedOptions[0];
         const ruleGroupId = selectedOption ? selectedOption.getAttribute('data-rule-group-id') : null;
         const textAlignment = textAlignmentSelect ? textAlignmentSelect.value : 'center';
         const imageAlignment = imageAlignmentSelect ? imageAlignmentSelect.value : 'center';
-        
+
         if (ruleGroupId) {
             // Collect result text forms (each with title, image, and result_text)
             const resultTextForms = card.querySelectorAll('.result-text-form');
             const textSettings = [];
-            
+
             resultTextForms.forEach((form, index) => {
                 const resultRuleTextId = form.getAttribute('data-result-rule-text-id');
                 const titleInput = form.querySelector('.result-text-form-title');
                 const imageValueInput = form.querySelector('.result-text-form-image-value');
                 const resultTextTextarea = form.querySelector('.result-text-form-text');
-                
+
                 const title = titleInput ? titleInput.value.trim() : null;
                 const image = imageValueInput ? imageValueInput.value.trim() : null;
                 const resultText = resultTextTextarea ? resultTextTextarea.value.trim() : null;
-                
+
                 if (resultRuleTextId && resultText) {
                     textSettings.push({
                         result_rule_text_id: resultRuleTextId.startsWith('temp-') || resultRuleTextId.startsWith('saved-') ? null : resultRuleTextId, // Only send real IDs
@@ -4712,11 +4896,11 @@ function collectFormData(options = {}) {
                     });
                 }
             });
-            
+
             const cardImageValue = imageValueInput && imageValueInput.value && imageValueInput.value.trim()
                 ? imageValueInput.value.trim()
                 : null;
-            
+
             formData.result_text_settings.push({
                 rule_group_id: ruleGroupId,
                 text_alignment: textAlignment,
@@ -4743,7 +4927,7 @@ function collectFormData(options = {}) {
     // Form title and description formatting
     const formTitle = document.getElementById('form-title');
     const formDescription = document.getElementById('form-description');
-    
+
     if (formTitle) {
         // Collect formatting directly from the element itself, not from parent card
         const formatting = collectElementFormatting(formTitle, 'form_title');
@@ -4751,7 +4935,7 @@ function collectFormData(options = {}) {
             formData.text_formatting.push(formatting);
         }
     }
-    
+
     if (formDescription) {
         // Collect formatting directly from the element itself, not from parent card
         const formatting = collectElementFormatting(formDescription, 'form_description');
@@ -4779,7 +4963,7 @@ function collectFormData(options = {}) {
         const sectionTitle = sectionDivider.querySelector('.section-title-input');
         const sectionDescription = sectionDivider.querySelector('.section-description-input');
         const sectionIndex = Array.from(document.querySelectorAll('.section-divider')).indexOf(sectionDivider);
-        
+
         if (sectionTitle) {
             // Pass the actual element (section-title-input), not the parent card
             const formatting = collectElementFormatting(sectionTitle, 'section_title', null, sectionIndex);
@@ -4787,7 +4971,7 @@ function collectFormData(options = {}) {
                 formData.text_formatting.push(formatting);
             }
         }
-        
+
         if (sectionDescription) {
             // Pass the actual element (section-description-input), not the parent card
             const formatting = collectElementFormatting(sectionDescription, 'section_description', null, sectionIndex);
@@ -4820,7 +5004,7 @@ function applyFormattingToElement(element, formatting) {
     } else {
         element.style.textAlign = 'left';
     }
-    
+
     element.style.fontFamily = formatting.font_family || 'Arial';
     element.style.fontSize = `${formatting.font_size || 12}px`;
     element.style.fontWeight = formatting.font_weight || 'normal';
@@ -4833,7 +5017,7 @@ function applyFormattingToElement(element, formatting) {
     const isFormTitleOrDescription = element.id === 'form-title' || element.id === 'form-description';
     const isQuestionTitle = element.classList.contains('question-title');
     const isSectionTitleOrDesc = element.classList.contains('section-title-input') || element.classList.contains('section-description-input');
-    
+
     if (isFormTitleOrDescription || isQuestionTitle || isSectionTitleOrDesc) {
         // Store directly on element for form/question/section title/description to avoid conflicts
         element.setAttribute('data-textAlign', formatting.text_align || 'left');
@@ -4858,7 +5042,7 @@ function applyFormattingToElement(element, formatting) {
 // Helper function to extract formatting from HTML content (inline spans)
 function extractFormattingFromHTML(element) {
     if (!element) return {};
-    
+
     // Get all spans with inline styles in the element
     const spans = element.querySelectorAll('span[style]');
     const formatting = {
@@ -4868,7 +5052,7 @@ function extractFormattingFromHTML(element) {
         font_style: null,
         text_decoration: null,
     };
-    
+
     // Check if there are any spans with formatting
     if (spans.length > 0) {
         // Get formatting from spans - prioritize spans with more formatting properties
@@ -4876,47 +5060,47 @@ function extractFormattingFromHTML(element) {
         spans.forEach(span => {
             const style = span.style;
             const styleText = span.getAttribute('style') || '';
-            
+
             // Extract font-family
             if (style.fontFamily || styleText.includes('font-family')) {
-                const fontFamilyValue = style.fontFamily || 
+                const fontFamilyValue = style.fontFamily ||
                     (styleText.match(/font-family:\s*([^;]+)/i) ? styleText.match(/font-family:\s*([^;]+)/i)[1].trim() : null);
                 if (fontFamilyValue && !formatting.font_family) {
                     formatting.font_family = fontFamilyValue.split(',')[0].replace(/['"]/g, '').trim();
                 }
             }
-            
+
             // Extract font-size
             if (style.fontSize || styleText.includes('font-size')) {
-                const fontSizeValue = style.fontSize || 
+                const fontSizeValue = style.fontSize ||
                     (styleText.match(/font-size:\s*([^;]+)/i) ? styleText.match(/font-size:\s*([^;]+)/i)[1].trim() : null);
                 if (fontSizeValue && !formatting.font_size) {
                     const parsed = parseInt(fontSizeValue.replace('px', '').replace('pt', '')) || null;
                     if (parsed) formatting.font_size = parsed;
                 }
             }
-            
+
             // Extract font-weight
             if (style.fontWeight || styleText.includes('font-weight')) {
-                const fontWeightValue = style.fontWeight || 
+                const fontWeightValue = style.fontWeight ||
                     (styleText.match(/font-weight:\s*([^;]+)/i) ? styleText.match(/font-weight:\s*([^;]+)/i)[1].trim() : null);
                 if (fontWeightValue && !formatting.font_weight) {
                     formatting.font_weight = (fontWeightValue === 'bold' || parseInt(fontWeightValue) >= 700) ? 'bold' : 'normal';
                 }
             }
-            
+
             // Extract font-style
             if (style.fontStyle || styleText.includes('font-style')) {
-                const fontStyleValue = style.fontStyle || 
+                const fontStyleValue = style.fontStyle ||
                     (styleText.match(/font-style:\s*([^;]+)/i) ? styleText.match(/font-style:\s*([^;]+)/i)[1].trim() : null);
                 if (fontStyleValue && !formatting.font_style) {
                     formatting.font_style = (fontStyleValue === 'italic') ? 'italic' : 'normal';
                 }
             }
-            
+
             // Extract text-decoration
             if (style.textDecoration || styleText.includes('text-decoration')) {
-                const textDecorationValue = style.textDecoration || 
+                const textDecorationValue = style.textDecoration ||
                     (styleText.match(/text-decoration:\s*([^;]+)/i) ? styleText.match(/text-decoration:\s*([^;]+)/i)[1].trim() : null);
                 if (textDecorationValue && !formatting.text_decoration) {
                     formatting.text_decoration = (textDecorationValue.includes('underline')) ? 'underline' : 'none';
@@ -4924,7 +5108,7 @@ function extractFormattingFromHTML(element) {
             }
         });
     }
-    
+
     return formatting;
 }
 
@@ -4937,7 +5121,7 @@ function collectElementFormatting(element, elementType, questionId = null, secti
     const isFormTitleOrDescription = elementType === 'form_title' || elementType === 'form_description';
     const isQuestionTitle = elementType === 'question_title';
     const isSectionTitleOrDesc = elementType === 'section_title' || elementType === 'section_description';
-    
+
     // Determine which element to get formatting from
     // For all title/description elements, use element itself (data attributes are stored on element)
     // For other elements, get from parent card if available
@@ -4949,51 +5133,51 @@ function collectElementFormatting(element, elementType, questionId = null, secti
 
     // Get formatting from the target element (element itself for form/question/section, parent for others)
     const computedStyle = window.getComputedStyle(element);
-    
+
     // Extract formatting from HTML content first (for inline styles in spans)
     const htmlFormatting = extractFormattingFromHTML(element);
-    
+
     // Get formatting from data attributes, inline styles, or computed styles
     // Priority: HTML inline spans (from toolbar) > data attributes > element style > computed style
     const textAlign = element.getAttribute('data-textAlign') || element.style.textAlign || computedStyle.textAlign || 'left';
-    
+
     // Font family: prioritize HTML spans (from toolbar changes) over data attributes
-    let fontFamily = htmlFormatting.font_family 
-        || element.getAttribute('data-fontFamily') 
-        || element.style.fontFamily 
-        || computedStyle.fontFamily 
+    let fontFamily = htmlFormatting.font_family
+        || element.getAttribute('data-fontFamily')
+        || element.style.fontFamily
+        || computedStyle.fontFamily
         || 'Arial';
     // Extract first font family from computed style
     if (fontFamily) {
         fontFamily = fontFamily.split(',')[0].replace(/['"]/g, '').trim();
     }
-    
+
     // Font size: check HTML spans first, then data attribute, then element style, then computed
-    let fontSizeValue = htmlFormatting.font_size 
+    let fontSizeValue = htmlFormatting.font_size
         ? `${htmlFormatting.font_size}px`
         : (element.getAttribute('data-fontSize') || element.style.fontSize || computedStyle.fontSize || '12px');
     // Parse fontSize - remove 'px' if present
     const fontSize = parseInt(fontSizeValue.toString().replace('px', '')) || 12;
-    
+
     // Font weight: check HTML spans first, then data attribute, then element style, then computed
-    const fontWeight = htmlFormatting.font_weight 
-        || element.getAttribute('data-fontWeight') 
-        || element.style.fontWeight 
-        || computedStyle.fontWeight 
+    const fontWeight = htmlFormatting.font_weight
+        || element.getAttribute('data-fontWeight')
+        || element.style.fontWeight
+        || computedStyle.fontWeight
         || 'normal';
-    
+
     // Font style: check HTML spans first, then data attribute, then element style, then computed
-    const fontStyle = htmlFormatting.font_style 
-        || element.getAttribute('data-fontStyle') 
-        || element.style.fontStyle 
-        || computedStyle.fontStyle 
+    const fontStyle = htmlFormatting.font_style
+        || element.getAttribute('data-fontStyle')
+        || element.style.fontStyle
+        || computedStyle.fontStyle
         || 'normal';
-    
+
     // Text decoration: check HTML spans first, then data attribute, then element style, then computed
-    const textDecoration = htmlFormatting.text_decoration 
-        || element.getAttribute('data-textDecoration') 
-        || element.style.textDecoration 
-        || computedStyle.textDecoration 
+    const textDecoration = htmlFormatting.text_decoration
+        || element.getAttribute('data-textDecoration')
+        || element.style.textDecoration
+        || computedStyle.textDecoration
         || 'none';
 
     const formatting = {
@@ -5041,21 +5225,21 @@ function showSuccessDialog(message) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     // Close modal handlers
     const closeBtn = modal.querySelector('#close-success-modal');
     closeBtn.addEventListener('click', () => {
         modal.remove();
     });
-    
+
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
             modal.remove();
         }
     });
-    
+
     // Auto close after 3 seconds
     setTimeout(() => {
         if (document.getElementById('success-modal')) {
@@ -5067,7 +5251,7 @@ function showSuccessDialog(message) {
 function openShareModal(link, showManualCopy = false) {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4';
-    
+
     // Jika showManualCopy true, tampilkan dialog dengan tombol salin manual (fallback)
     if (showManualCopy) {
         modal.innerHTML = `
@@ -5084,30 +5268,30 @@ function openShareModal(link, showManualCopy = false) {
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
-        
+
         const input = modal.querySelector('.share-link-input');
         if (input) {
             input.focus();
             input.select();
         }
-        
+
         const closeModal = () => {
             modal.remove();
         };
-        
+
         modal.addEventListener('click', (event) => {
             if (event.target === modal) {
                 closeModal();
             }
         });
-        
+
         const closeBtn = modal.querySelector('[data-share-close]');
         if (closeBtn) {
             closeBtn.addEventListener('click', closeModal);
         }
-        
+
         const copyBtn = modal.querySelector('[data-share-copy]');
         if (copyBtn) {
             copyBtn.addEventListener('click', async () => {
@@ -5154,24 +5338,24 @@ function openShareModal(link, showManualCopy = false) {
                 </div>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
-        
+
         const closeModal = () => {
             modal.remove();
         };
-        
+
         const closeBtn = modal.querySelector('#close-share-modal');
         if (closeBtn) {
             closeBtn.addEventListener('click', closeModal);
         }
-        
+
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 closeModal();
             }
         });
-        
+
         // Auto close after 3 seconds
         setTimeout(() => {
             if (document.body.contains(modal)) {
@@ -5238,19 +5422,19 @@ function populateFormBuilder(data) {
     const answerTemplatesContainer = document.getElementById('answer-templates-container');
     const resultRulesContainer = document.getElementById('result-rules-container');
     const questionsContainer = document.getElementById('questions-container');
-    
+
     // Clear saved rules state (this is global, but we want to ensure clean state)
     // Note: savedRulesState is for global presets, not form-specific rules
     // Form-specific rules come from data.answer_templates and data.result_rules
-    
+
     if (answerTemplatesContainer) {
         answerTemplatesContainer.innerHTML = getAnswerTemplatesPlaceholder();
     }
-    
+
     if (resultRulesContainer) {
         resultRulesContainer.innerHTML = getResultRulesPlaceholder();
     }
-    
+
     if (questionsContainer) {
         // Clear all questions, sections, and result settings
         questionsContainer.innerHTML = '';
@@ -5261,7 +5445,7 @@ function populateFormBuilder(data) {
         headerState.imageUrl = data.header.image_path || null;
         headerState.imageMode = data.header.image_mode || 'cover';
         headerState.source = data.header.source || null;
-        
+
         // Apply header to form if exists
         if (headerState.imageUrl && typeof applyHeaderToForm === 'function') {
             setTimeout(() => applyHeaderToForm(), 100);
@@ -5323,6 +5507,7 @@ function populateFormBuilder(data) {
         Boolean(data.limit_one_response),
         Boolean(data.show_progress_bar),
         Boolean(data.shuffle_questions),
+        Boolean(data.use_bmi_formula),
     ];
 
     settingsCheckboxes.forEach((checkbox, index) => {
@@ -5331,10 +5516,18 @@ function populateFormBuilder(data) {
         checkbox.dispatchEvent(new Event('change'));
     });
 
+    // Load BMI Mapping
+    if (data.bmi_mapping) {
+        const weightSelect = document.getElementById('bmi-weight-question');
+        const heightSelect = document.getElementById('bmi-height-question');
+        if (weightSelect) weightSelect.value = data.bmi_mapping.weight_question_id || '';
+        if (heightSelect) heightSelect.value = data.bmi_mapping.height_question_id || '';
+    }
+
     if (answerTemplatesContainer) {
         // Ensure container is cleared first
         answerTemplatesContainer.innerHTML = '';
-        
+
         const templates = Array.isArray(data.answer_templates) ? data.answer_templates : [];
 
         if (templates.length === 0) {
@@ -5359,10 +5552,10 @@ function populateFormBuilder(data) {
                 const deleteBtn = templateCard.querySelector('.delete-answer-template-btn');
                 if (deleteBtn && !deleteBtn.hasAttribute('data-listener')) {
                     deleteBtn.setAttribute('data-listener', 'true');
-                    deleteBtn.addEventListener('click', async function() {
+                    deleteBtn.addEventListener('click', async function () {
                         const dbId = templateCard.getAttribute('data-db-id');
                         const formId = getMetaContent('form-id');
-                        
+
                         // If form is saved and template has database ID, delete from database
                         if (formId && dbId) {
                             try {
@@ -5374,7 +5567,7 @@ function populateFormBuilder(data) {
                                         'Accept': 'application/json',
                                     },
                                 });
-                                
+
                                 const data = await response.json();
                                 if (!response.ok || !data.success) {
                                     throw new Error(data.message || 'Gagal menghapus template.');
@@ -5385,7 +5578,7 @@ function populateFormBuilder(data) {
                                 return; // Don't remove from DOM if database delete failed
                             }
                         }
-                        
+
                         // Remove from DOM
                         templateCard.remove();
                         if (answerTemplatesContainer.children.length === 0) {
@@ -5402,7 +5595,7 @@ function populateFormBuilder(data) {
     if (resultRulesContainer) {
         // Ensure container is cleared first
         resultRulesContainer.innerHTML = '';
-        
+
         const rules = Array.isArray(data.result_rules) ? data.result_rules : [];
 
         if (rules.length === 0) {
@@ -5438,22 +5631,26 @@ function populateFormBuilder(data) {
                 const addResultTextBtn = ruleCard.querySelector('.add-result-text-btn');
                 const texts = Array.isArray(rule.texts) && rule.texts.length ? rule.texts : [''];
 
-                texts.forEach((text, idx) => {
-                    const textValue = extractResultTextValue(text);
-                    if (idx === 0) {
-                        const textarea = resultTextsContainer.querySelector('.rule-result-text');
-                        if (textarea) {
-                            textarea.value = textValue;
+                if (resultTextsContainer) {
+                    resultTextsContainer.innerHTML = ''; // Clear any default items
+                    texts.forEach((text) => {
+                        const textValue = extractResultTextValue(text);
+                        const dbId = (typeof text === 'object') ? text.id : null;
+                        const textItem = createResultTextItem(textValue, dbId);
+                        resultTextsContainer.appendChild(textItem);
+
+                        // Re-attach delete listener because it's dynamic
+                        const deleteBtn = textItem.querySelector('.delete-result-text-btn');
+                        if (deleteBtn) {
+                            deleteBtn.addEventListener('click', function () {
+                                textItem.remove();
+                                if (resultTextsContainer.children.length === 0 && addResultTextBtn) {
+                                    addResultTextBtn.click();
+                                }
+                            });
                         }
-                    } else if (addResultTextBtn) {
-                        addResultTextBtn.click();
-                        const textareas = resultTextsContainer.querySelectorAll('.rule-result-text');
-                        const textarea = textareas[textareas.length - 1];
-                        if (textarea) {
-                            textarea.value = textValue;
-                        }
-                    }
-                });
+                    });
+                }
 
                 // Attach events to rule card (including delete button)
                 attachResultRuleEvents(ruleCard, resultRulesContainer);
@@ -5479,34 +5676,56 @@ function populateFormBuilder(data) {
         batchSize,
         textFormattingMap: textFormattingMap, // Pass formatting map
         onComplete: () => {
+            // The original onComplete function for populateFormBuilder (if any)
+            // is not directly passed here, so this call might be for an internal
+            // onComplete within renderQuestionsIncrementally if it were to exist.
+            // For now, we'll assume it's a placeholder or refers to a higher-scope onComplete.
+            // If populateFormBuilder itself accepts an onComplete, it should be called here.
+            // For this specific change, we'll add it as requested.
+            if (typeof onComplete === 'function') {
+                onComplete();
+            }
+            // Refresh BMI list after questions are loaded
+            if (data.use_bmi_formula) {
+                ensureBmiQuestionsExist();
+            }
+
+            // Re-select BMI mapping if questions were just loaded
+            if (data.bmi_mapping) {
+                const weightSelect = document.getElementById('bmi-weight-question');
+                const heightSelect = document.getElementById('bmi-height-question');
+                if (weightSelect) weightSelect.value = data.bmi_mapping.weight_question_id || '';
+                if (heightSelect) heightSelect.value = data.bmi_mapping.height_question_id || '';
+            }
+
             updateMainButtonsVisibility();
             if (questions.length === 0) {
                 const defaultQuestion = createQuestionCard('short-answer');
                 questionsContainer.appendChild(defaultQuestion);
                 attachQuestionCardEvents(defaultQuestion);
             }
-            
+
             // Load result settings - insert at correct position based on order
             const resultSettings = Array.isArray(data.result_settings) ? data.result_settings : [];
-            
+
             console.log('[populateFormBuilder] Result settings data:', {
                 hasResultSettings: !!data.result_settings,
                 resultSettingsCount: resultSettings.length,
                 resultSettings: resultSettings,
             });
-            
+
             // Sort result settings by order to ensure correct sequence
             const sortedResultSettings = resultSettings.slice().sort((a, b) => {
                 const orderA = a.order !== undefined ? a.order : 999;
                 const orderB = b.order !== undefined ? b.order : 999;
                 return orderA - orderB;
             });
-            
+
             console.log('[populateFormBuilder] Processing result settings:', {
                 sortedCount: sortedResultSettings.length,
                 totalItems: questionsContainer.children.length,
             });
-            
+
             sortedResultSettings.forEach((setting, index) => {
                 console.log('[populateFormBuilder] Processing result setting:', {
                     index,
@@ -5516,7 +5735,7 @@ function populateFormBuilder(data) {
                 });
                 const resultSettingCard = createResultSettingCard();
                 attachResultSettingEvents(resultSettingCard);
-                
+
                 // Determine insertion position based on order
                 // If order is within range of current items, insert at that position
                 // Otherwise, append at the end
@@ -5524,7 +5743,7 @@ function populateFormBuilder(data) {
                 const totalItems = currentItems.length;
                 const targetOrder = setting.order !== undefined ? setting.order : totalItems + index;
                 let insertPosition = null;
-                
+
                 if (targetOrder < totalItems) {
                     // Insert at specific position
                     const targetItem = currentItems[targetOrder];
@@ -5533,12 +5752,12 @@ function populateFormBuilder(data) {
                         insertPosition = 'inserted';
                     }
                 }
-                
+
                 // If not inserted yet, append at the end
                 if (!insertPosition) {
                     questionsContainer.appendChild(resultSettingCard);
                 }
-                
+
                 // Populate data
                 const ruleSelect = resultSettingCard.querySelector('.result-setting-rule-select');
                 const imageValueInput = resultSettingCard.querySelector('.result-setting-image-value');
@@ -5547,7 +5766,7 @@ function populateFormBuilder(data) {
                 const imageSettings = resultSettingCard.querySelector('.result-setting-image-settings');
                 const alignmentSelect = resultSettingCard.querySelector('.result-setting-image-alignment-select');
                 const textAlignmentSelect = resultSettingCard.querySelector('.result-setting-text-alignment-select');
-                
+
                 // Find rule_group_id from result_rule_id or use rule_group_id directly
                 let ruleGroupId = null;
                 if (setting.rule_group_id) {
@@ -5561,7 +5780,7 @@ function populateFormBuilder(data) {
                         ruleGroupId = matchingRule.rule_group_id;
                     }
                 }
-                
+
                 // Set selected option based on rule_group_id
                 // Use setTimeout to ensure dropdown options are fully rendered
                 setTimeout(() => {
@@ -5595,7 +5814,7 @@ function populateFormBuilder(data) {
                         });
                     }
                 }, 100); // Small delay to ensure DOM is ready
-                
+
                 // Apply saved text settings (title, image per text) if available
                 if (Array.isArray(setting.text_settings) && setting.text_settings.length) {
                     updateRuleGroupTextLookup(ruleGroupId, setting.text_settings);
@@ -5614,7 +5833,7 @@ function populateFormBuilder(data) {
                     updateRuleGroupTextLookup(ruleGroupId, fallbackTextObjects);
                     setResultSettingTextValues(resultSettingCard, fallbackTextObjects);
                 }
-                
+
                 // Populate image if exists
                 if (setting.image || setting.image_url) {
                     const imageUrl = setting.image_url || setting.image;
@@ -5631,7 +5850,7 @@ function populateFormBuilder(data) {
                         imageSettings.classList.remove('hidden');
                     }
                 }
-                
+
                 if (textAlignmentSelect) {
                     if (setting.text_alignment) {
                         textAlignmentSelect.value = setting.text_alignment;
@@ -5646,7 +5865,7 @@ function populateFormBuilder(data) {
                     alignmentSelect.dispatchEvent(new Event('change'));
                 }
             });
-            
+
             updateSectionNumbers();
             updateQuestionNumbers();
             updateUseRuleButtonsVisibility();
@@ -5700,16 +5919,16 @@ function initCardFormattingToolbar() {
             if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
                 editableElement = convertToContentEditable(target);
             }
-            
+
             // Store the active input element
             activeInputElement = editableElement;
             activeCardElement = editableElement.closest('.question-card, .section-divider') || editableElement.closest('.bg-white.rounded-lg');
             toolbar.classList.remove('opacity-0', 'pointer-events-none');
             toolbar.classList.add('opacity-100', 'pointer-events-auto');
-            
+
             // Load existing formatting from data attributes or inline styles
             loadExistingFormatting(editableElement);
-            
+
             // Listen for selection changes to update button states (only add once)
             if (!editableElement.hasAttribute('data-formatting-listeners')) {
                 editableElement.setAttribute('data-formatting-listeners', 'true');
@@ -5728,7 +5947,7 @@ function initCardFormattingToolbar() {
             }
         }
     }
-    
+
     // Load existing formatting from element
     function loadExistingFormatting(element) {
         const parentCard = element.closest('.question-card, .section-divider, .bg-white.rounded-lg');
@@ -5736,7 +5955,7 @@ function initCardFormattingToolbar() {
         // For question title, check parent card (data attributes are stored on parent)
         const isSectionTitleOrDesc = element.classList.contains('section-title-input') || element.classList.contains('section-description-input');
         const source = (isSectionTitleOrDesc ? element : parentCard) || element;
-        
+
         // Check if there's a selection/block - prioritize formatting from selected text
         const selection = window.getSelection();
         let fontFamily = null;
@@ -5744,61 +5963,61 @@ function initCardFormattingToolbar() {
         let fontWeight = null;
         let fontStyle = null;
         let textDecoration = null;
-        
+
         if (selection && selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
             if (!range.collapsed) {
                 // There's a selection - get formatting from selected text
                 const container = range.commonAncestorContainer;
                 let selectedElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
-                
+
                 // Traverse up to find formatting in spans
                 while (selectedElement && selectedElement !== document.body && element.contains(selectedElement)) {
                     const computedStyle = window.getComputedStyle(selectedElement);
-                    
+
                     // Get font-family from span with inline style
                     if (!fontFamily && selectedElement.tagName === 'SPAN' && selectedElement.style.fontFamily) {
                         fontFamily = selectedElement.style.fontFamily.split(',')[0].replace(/['"]/g, '').trim();
                     } else if (!fontFamily && computedStyle.fontFamily && computedStyle.fontFamily !== 'Arial') {
                         fontFamily = computedStyle.fontFamily.split(',')[0].replace(/['"]/g, '').trim();
                     }
-                    
+
                     // Get font-size from span
                     if (!fontSize && selectedElement.tagName === 'SPAN' && selectedElement.style.fontSize) {
                         fontSize = parseInt(selectedElement.style.fontSize) || null;
                     } else if (!fontSize && computedStyle.fontSize) {
                         fontSize = parseInt(computedStyle.fontSize) || null;
                     }
-                    
+
                     // Get font-weight
-                    if (!fontWeight && (selectedElement.tagName === 'STRONG' || selectedElement.tagName === 'B' || 
+                    if (!fontWeight && (selectedElement.tagName === 'STRONG' || selectedElement.tagName === 'B' ||
                         computedStyle.fontWeight === 'bold' || computedStyle.fontWeight === '700')) {
                         fontWeight = 'bold';
                     } else if (!fontWeight) {
                         fontWeight = computedStyle.fontWeight || 'normal';
                     }
-                    
+
                     // Get font-style
-                    if (!fontStyle && (selectedElement.tagName === 'EM' || selectedElement.tagName === 'I' || 
+                    if (!fontStyle && (selectedElement.tagName === 'EM' || selectedElement.tagName === 'I' ||
                         computedStyle.fontStyle === 'italic')) {
                         fontStyle = 'italic';
                     } else if (!fontStyle) {
                         fontStyle = computedStyle.fontStyle || 'normal';
                     }
-                    
+
                     // Get text-decoration
-                    if (!textDecoration && (selectedElement.tagName === 'U' || 
+                    if (!textDecoration && (selectedElement.tagName === 'U' ||
                         computedStyle.textDecoration.includes('underline'))) {
                         textDecoration = 'underline';
                     } else if (!textDecoration) {
                         textDecoration = computedStyle.textDecoration || 'none';
                     }
-                    
+
                     selectedElement = selectedElement.parentElement;
                 }
             }
         }
-        
+
         // If no selection or formatting not found from selection, get from element/parent
         if (!fontFamily) {
             fontFamily = source.getAttribute('data-fontFamily') || element.style.fontFamily || 'Arial';
@@ -5812,7 +6031,7 @@ function initCardFormattingToolbar() {
                 }
             }
         }
-        
+
         if (!fontSize) {
             fontSize = source.getAttribute('data-fontSize') || parseInt(element.style.fontSize) || 12;
         }
@@ -5825,9 +6044,9 @@ function initCardFormattingToolbar() {
         if (!textDecoration) {
             textDecoration = source.getAttribute('data-textDecoration') || element.style.textDecoration || 'none';
         }
-        
+
         const textAlign = source.getAttribute('data-textAlign') || element.style.textAlign || 'left';
-        
+
         // Update state
         cardFormattingState = {
             textAlign: textAlign,
@@ -5837,18 +6056,18 @@ function initCardFormattingToolbar() {
             fontStyle: fontStyle,
             textDecoration: textDecoration
         };
-        
+
         // Update displays
         updateFontSizeDisplay(fontSize);
         updateFontFamilyDisplay(fontFamily);
         updateTextAlignIcon(textAlign);
-        
+
         // Update manual input
         const fontSizeManualInput = document.querySelector('#font-size-manual');
         if (fontSizeManualInput) {
             fontSizeManualInput.value = fontSize;
         }
-        
+
         // Update button states
         const toolbar = document.getElementById('card-formatting-toolbar');
         if (toolbar) {
@@ -5861,7 +6080,7 @@ function initCardFormattingToolbar() {
                     boldBtn.classList.remove('bg-red-100');
                 }
             }
-            
+
             // Italic
             const italicBtn = toolbar.querySelector('[data-tool="italic"]');
             if (italicBtn) {
@@ -5871,7 +6090,7 @@ function initCardFormattingToolbar() {
                     italicBtn.classList.remove('bg-red-100');
                 }
             }
-            
+
             // Underline
             const underlineBtn = toolbar.querySelector('[data-tool="underline"]');
             if (underlineBtn) {
@@ -5888,19 +6107,19 @@ function initCardFormattingToolbar() {
         // Delay to check if focus moved to another allowed input or toolbar
         setTimeout(() => {
             const activeElement = document.activeElement;
-            
+
             // Check if focus moved to toolbar
             const toolbarElement = document.getElementById('card-formatting-toolbar');
             const isClickingToolbar = toolbarElement && (
-                toolbarElement.contains(activeElement) || 
+                toolbarElement.contains(activeElement) ||
                 activeElement.closest('#card-formatting-toolbar')
             );
-            
+
             // If clicking toolbar, keep it visible and don't clear activeInputElement
             if (isClickingToolbar) {
                 return; // Keep toolbar visible and activeInputElement intact
             }
-            
+
             // Check if focus moved to another allowed input
             const isAllowed = allowedInputs.some(selector => {
                 if (selector.startsWith('#')) {
@@ -5929,12 +6148,12 @@ function initCardFormattingToolbar() {
     // Attach focus/blur listeners to all allowed inputs
     document.addEventListener('focusin', handleFocus);
     document.addEventListener('focusout', handleBlur);
-    
+
     // Prevent toolbar from hiding when clicking inside it
     toolbar.addEventListener('mousedown', (e) => {
         e.preventDefault(); // Prevent input from losing focus
     });
-    
+
     // Also handle clicks on toolbar to prevent blur
     toolbar.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -5961,14 +6180,14 @@ function initCardFormattingToolbar() {
         activeCardElement = activeElement.closest('.question-card, .section-divider') || activeElement.closest('.bg-white.rounded-lg');
         toolbar.classList.remove('opacity-0', 'pointer-events-none');
         toolbar.classList.add('opacity-100', 'pointer-events-auto');
-        
+
         // Load existing formatting from data attributes or inline styles
         loadExistingFormatting(activeElement);
     }
 
     // Handle toolbar button clicks
     setupToolbarEvents();
-    
+
     // Load Google Fonts (lazy load when font dropdown is opened)
 }
 
@@ -5982,13 +6201,13 @@ function setupToolbarEvents() {
     const textAlignDropdown = textAlignBtn?.nextElementSibling;
     const textAlignOptions = toolbar.querySelectorAll('.text-align-option');
     const textAlignIcon = toolbar.querySelector('#text-align-icon');
-    
+
     if (textAlignBtn && textAlignDropdown) {
         textAlignBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             textAlignDropdown.classList.toggle('hidden');
         });
-        
+
         textAlignOptions.forEach(option => {
             option.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -6006,7 +6225,7 @@ function setupToolbarEvents() {
     const fontFamilyDropdown = fontFamilyBtn?.nextElementSibling;
     const fontFamilySearchInput = toolbar.querySelector('#font-family-search-input');
     const fontFamilyList = toolbar.querySelector('#font-family-list');
-    
+
     if (fontFamilyBtn && fontFamilyDropdown) {
         fontFamilyBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -6025,7 +6244,7 @@ function setupToolbarEvents() {
                 }
             }
         });
-        
+
         if (fontFamilySearchInput) {
             fontFamilySearchInput.addEventListener('input', (e) => {
                 filterFonts(e.target.value);
@@ -6049,7 +6268,7 @@ function setupToolbarEvents() {
     // Font Size - Increase/Decrease Buttons
     const increaseSizeBtn = toolbar.querySelector('[data-action="increase-size"]');
     const decreaseSizeBtn = toolbar.querySelector('[data-action="decrease-size"]');
-    
+
     if (increaseSizeBtn) {
         increaseSizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -6060,7 +6279,7 @@ function setupToolbarEvents() {
             if (fontSizeManualInput) fontSizeManualInput.value = newSize;
         });
     }
-    
+
     if (decreaseSizeBtn) {
         decreaseSizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -6076,13 +6295,13 @@ function setupToolbarEvents() {
     const fontSizeBtn = toolbar.querySelector('[data-tool="font-size"]');
     const fontSizeDropdown = fontSizeBtn?.nextElementSibling;
     const fontSizeTemplateOptions = toolbar.querySelectorAll('.font-size-template-option');
-    
+
     if (fontSizeBtn && fontSizeDropdown) {
         fontSizeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             fontSizeDropdown.classList.toggle('hidden');
         });
-        
+
         fontSizeTemplateOptions.forEach(option => {
             option.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -6223,29 +6442,29 @@ function updateTextAlignIcon(alignment) {
 // Convert input/textarea to contenteditable div for rich text formatting
 function convertToContentEditable(element) {
     if (!element || element.contentEditable === 'true') return element;
-    
+
     // Create contenteditable div
     const contentEditable = document.createElement('div');
     contentEditable.contentEditable = 'true';
     contentEditable.className = element.className;
     contentEditable.style.cssText = element.style.cssText;
-    
+
     // Copy value
     const text = element.value || element.textContent || '';
     contentEditable.textContent = text;
-    
+
     // Copy attributes
     if (element.id) contentEditable.id = element.id;
     if (element.placeholder) contentEditable.setAttribute('data-placeholder', element.placeholder);
-    
+
     // Add placeholder styling
     if (element.placeholder) {
-        contentEditable.addEventListener('focus', function() {
+        contentEditable.addEventListener('focus', function () {
             if (!this.textContent.trim()) {
                 this.classList.add('empty');
             }
         });
-        contentEditable.addEventListener('blur', function() {
+        contentEditable.addEventListener('blur', function () {
             if (!this.textContent.trim()) {
                 this.classList.add('empty');
             } else {
@@ -6256,10 +6475,10 @@ function convertToContentEditable(element) {
             contentEditable.classList.add('empty');
         }
     }
-    
+
     // Replace element
     element.parentNode.replaceChild(contentEditable, element);
-    
+
     return contentEditable;
 }
 
@@ -6275,11 +6494,11 @@ function getPlainTextFromContentEditable(element) {
 // Normalize HTML by removing unnecessary nested spans
 function normalizeHTML(html) {
     if (!html) return '';
-    
+
     // Create a temporary container to parse HTML
     const temp = document.createElement('div');
     temp.innerHTML = html;
-    
+
     // Flatten nested spans
     const flattenSpans = (container) => {
         const spans = container.querySelectorAll('span');
@@ -6289,7 +6508,7 @@ function normalizeHTML(html) {
                 const parentSpan = span.parentElement;
                 const parentStyle = parentSpan.getAttribute('style') || '';
                 const spanStyle = span.getAttribute('style') || '';
-                
+
                 // If same style, remove inner span
                 if (parentStyle === spanStyle) {
                     while (span.firstChild) {
@@ -6302,15 +6521,15 @@ function normalizeHTML(html) {
                     // Merge styles (inner takes precedence)
                     const mergedStyle = mergeStyles(parentStyle, spanStyle);
                     span.setAttribute('style', mergedStyle);
-                    
+
                     // Move span out of parent
                     parentSpan.parentNode.insertBefore(span, parentSpan);
-                    
+
                     // Move parent's other children after span
                     while (parentSpan.firstChild) {
                         span.parentNode.insertBefore(parentSpan.firstChild, span.nextSibling);
                     }
-                    
+
                     // Remove empty parent
                     parentSpan.parentNode.removeChild(parentSpan);
                 }
@@ -6325,12 +6544,12 @@ function normalizeHTML(html) {
             }
         });
     };
-    
+
     // Run multiple times to handle deeply nested spans
     for (let i = 0; i < 5; i++) {
         flattenSpans(temp);
     }
-    
+
     // Remove empty spans
     const emptySpans = temp.querySelectorAll('span');
     emptySpans.forEach(span => {
@@ -6343,7 +6562,7 @@ function normalizeHTML(html) {
             span.parentNode.removeChild(span);
         }
     });
-    
+
     return temp.innerHTML;
 }
 
@@ -6362,13 +6581,13 @@ function mergeStyles(parentStyle, innerStyle) {
         });
         return styles;
     };
-    
+
     const parentStyles = parseStyle(parentStyle);
     const innerStyles = parseStyle(innerStyle);
-    
+
     // Merge: inner takes precedence
     const merged = { ...parentStyles, ...innerStyles };
-    
+
     // Convert back to style string
     return Object.entries(merged)
         .map(([prop, value]) => `${prop}: ${value}`)
@@ -6403,24 +6622,24 @@ function applyCardFormatting(property, value) {
     if (!activeInputElement) return;
 
     let activeInput = activeInputElement;
-    
+
     // Convert to contenteditable if not already
     if (activeInput.tagName === 'INPUT' || activeInput.tagName === 'TEXTAREA') {
         activeInput = convertToContentEditable(activeInput);
         activeInputElement = activeInput; // Update reference
     }
-    
+
     // Check if there's a selection
     const selection = window.getSelection();
     const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-    
+
     // If there's a selection, apply formatting to selection only
     if (range && !range.collapsed && activeInput.contains(range.commonAncestorContainer)) {
         // Apply formatting to selected text
         applyFormattingToSelection(property, value, range);
         return;
     }
-    
+
     // If no selection, apply to entire element (for textAlign, fontSize, fontFamily)
     if (property === 'textAlign' || property === 'fontSize' || property === 'fontFamily') {
         activeInput.style[property] = property === 'fontSize' ? `${value}px` : value;
@@ -6431,7 +6650,7 @@ function applyCardFormatting(property, value) {
     const isFormTitleOrDescription = activeInput.id === 'form-title' || activeInput.id === 'form-description';
     const isQuestionTitle = activeInput.classList.contains('question-title');
     const isSectionTitleOrDesc = activeInput.classList.contains('section-title-input') || activeInput.classList.contains('section-description-input');
-    
+
     if (isFormTitleOrDescription || isQuestionTitle || isSectionTitleOrDesc) {
         // Store directly on element for form/question/section title/description to avoid conflicts
         activeInput.setAttribute(`data-${property}`, value);
@@ -6449,13 +6668,13 @@ function applyCardFormatting(property, value) {
 // Apply formatting to selected text only
 function applyFormattingToSelection(property, value, range) {
     if (!range || range.collapsed) return;
-    
+
     try {
         // Save selection
         const selection = window.getSelection();
         selection.removeAllRanges();
         selection.addRange(range.cloneRange());
-        
+
         // Apply formatting based on property
         switch (property) {
             case 'fontWeight':
@@ -6523,12 +6742,12 @@ function applyFormattingToSelection(property, value, range) {
                 }
                 break;
         }
-        
+
         // Update button states for bold/italic/underline
         if (property === 'fontWeight' || property === 'fontStyle' || property === 'textDecoration') {
             updateFormattingButtonStates();
         }
-        
+
         // Update displays for fontSize and fontFamily
         if (property === 'fontSize') {
             updateFontSizeDisplay(value);
@@ -6539,7 +6758,7 @@ function applyFormattingToSelection(property, value, range) {
         if (property === 'textAlign') {
             updateTextAlignIcon(value);
         }
-        
+
     } catch (e) {
         console.error('Error applying formatting to selection:', e);
     }
@@ -6548,56 +6767,56 @@ function applyFormattingToSelection(property, value, range) {
 // Check formatting state at cursor/selection position
 function checkFormattingState(property) {
     if (!activeInputElement) return null;
-    
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return null;
-    
+
     const range = selection.getRangeAt(0);
     const container = range.commonAncestorContainer;
     let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
-    
+
     // Traverse up to find formatting
     while (element && element !== document.body && element !== activeInputElement) {
         const computedStyle = window.getComputedStyle(element);
-        
+
         if (property === 'fontWeight') {
-            if (element.tagName === 'STRONG' || element.tagName === 'B' || 
+            if (element.tagName === 'STRONG' || element.tagName === 'B' ||
                 computedStyle.fontWeight === 'bold' || computedStyle.fontWeight === '700' ||
                 parseInt(computedStyle.fontWeight) >= 700) {
                 return 'bold';
             }
         } else if (property === 'fontStyle') {
-            if (element.tagName === 'EM' || element.tagName === 'I' || 
+            if (element.tagName === 'EM' || element.tagName === 'I' ||
                 computedStyle.fontStyle === 'italic') {
                 return 'italic';
             }
         } else if (property === 'textDecoration') {
-            if (element.tagName === 'U' || 
+            if (element.tagName === 'U' ||
                 computedStyle.textDecoration.includes('underline')) {
                 return 'underline';
             }
         }
-        
+
         element = element.parentElement;
     }
-    
+
     return 'normal';
 }
 
 // Update formatting button states based on current selection or cursor position
 function updateFormattingButtonStates() {
     if (!activeInputElement) return;
-    
+
     const toolbar = document.getElementById('card-formatting-toolbar');
     if (!toolbar) return;
-    
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
         // No selection, check at cursor position
         const boldState = checkFormattingState('fontWeight');
         const italicState = checkFormattingState('fontStyle');
         const underlineState = checkFormattingState('textDecoration');
-        
+
         const boldBtn = toolbar.querySelector('[data-action="bold"]');
         if (boldBtn) {
             if (boldState === 'bold') {
@@ -6606,7 +6825,7 @@ function updateFormattingButtonStates() {
                 boldBtn.classList.remove('bg-red-100');
             }
         }
-        
+
         const italicBtn = toolbar.querySelector('[data-action="italic"]');
         if (italicBtn) {
             if (italicState === 'italic') {
@@ -6615,7 +6834,7 @@ function updateFormattingButtonStates() {
                 italicBtn.classList.remove('bg-red-100');
             }
         }
-        
+
         const underlineBtn = toolbar.querySelector('[data-action="underline"]');
         if (underlineBtn) {
             if (underlineState === 'underline') {
@@ -6624,11 +6843,11 @@ function updateFormattingButtonStates() {
                 underlineBtn.classList.remove('bg-red-100');
             }
         }
-        
+
         // Update font-family and font-size display from element/data attributes (when no selection)
         const isSectionTitleOrDesc = activeInputElement.classList.contains('section-title-input') || activeInputElement.classList.contains('section-description-input');
         const source = isSectionTitleOrDesc ? activeInputElement : (activeInputElement.closest('.question-card, .section-divider') || activeInputElement);
-        
+
         // Get font-family from data attribute or element style
         let fontFamily = activeInputElement.getAttribute('data-fontFamily') || activeInputElement.style.fontFamily;
         if (!fontFamily || fontFamily === 'Arial' || fontFamily === '') {
@@ -6644,7 +6863,7 @@ function updateFormattingButtonStates() {
             cardFormattingState.fontFamily = fontFamily;
             updateFontFamilyDisplay(fontFamily);
         }
-        
+
         // Get font-size from data attribute or element style
         let fontSize = activeInputElement.getAttribute('data-fontSize') || parseInt(activeInputElement.style.fontSize);
         if (!fontSize) {
@@ -6659,23 +6878,23 @@ function updateFormattingButtonStates() {
                 fontSizeManualInput.value = fontSize;
             }
         }
-        
+
         // Get text-align from data attribute or element style
         const textAlign = activeInputElement.getAttribute('data-textAlign') || activeInputElement.style.textAlign || 'left';
         if (textAlign) {
             cardFormattingState.textAlign = textAlign;
             updateTextAlignIcon(textAlign);
         }
-        
+
         return;
     }
-    
+
     // There's a selection - update font-family and font-size from selected text
     const range = selection.getRangeAt(0);
     if (!range.collapsed) {
         const container = range.commonAncestorContainer;
         let selectedElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
-        
+
         // Find font-family from selected span
         while (selectedElement && selectedElement !== document.body && activeInputElement.contains(selectedElement)) {
             if (selectedElement.tagName === 'SPAN' && selectedElement.style.fontFamily) {
@@ -6688,7 +6907,7 @@ function updateFormattingButtonStates() {
             }
             selectedElement = selectedElement.parentElement;
         }
-        
+
         // Find font-size from selected span
         selectedElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
         while (selectedElement && selectedElement !== document.body && activeInputElement.contains(selectedElement)) {
@@ -6707,42 +6926,42 @@ function updateFormattingButtonStates() {
             selectedElement = selectedElement.parentElement;
         }
     }
-    
+
     // Check if selection contains bold/italic/underline
     const selectionRange = selection.getRangeAt(0);
     const container = selectionRange.commonAncestorContainer;
     let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
-    
+
     let isBold = false;
     let isItalic = false;
     let isUnderline = false;
-    
+
     // Traverse up to find formatting
     while (element && element !== document.body && element !== activeInputElement) {
         const computedStyle = window.getComputedStyle(element);
-        
+
         // Check bold
-        if (!isBold && (element.tagName === 'STRONG' || element.tagName === 'B' || 
+        if (!isBold && (element.tagName === 'STRONG' || element.tagName === 'B' ||
             computedStyle.fontWeight === 'bold' || computedStyle.fontWeight === '700' ||
             parseInt(computedStyle.fontWeight) >= 700)) {
             isBold = true;
         }
-        
+
         // Check italic
-        if (!isItalic && (element.tagName === 'EM' || element.tagName === 'I' || 
+        if (!isItalic && (element.tagName === 'EM' || element.tagName === 'I' ||
             computedStyle.fontStyle === 'italic')) {
             isItalic = true;
         }
-        
+
         // Check underline
-        if (!isUnderline && (element.tagName === 'U' || 
+        if (!isUnderline && (element.tagName === 'U' ||
             computedStyle.textDecoration.includes('underline'))) {
             isUnderline = true;
         }
-        
+
         element = element.parentElement;
     }
-    
+
     // Update button states
     const boldBtn = toolbar.querySelector('[data-action="bold"]');
     if (boldBtn) {
@@ -6752,7 +6971,7 @@ function updateFormattingButtonStates() {
             boldBtn.classList.remove('bg-red-100');
         }
     }
-    
+
     const italicBtn = toolbar.querySelector('[data-action="italic"]');
     if (italicBtn) {
         if (isItalic) {
@@ -6761,7 +6980,7 @@ function updateFormattingButtonStates() {
             italicBtn.classList.remove('bg-red-100');
         }
     }
-    
+
     const underlineBtn = toolbar.querySelector('[data-action="underline"]');
     if (underlineBtn) {
         if (isUnderline) {
@@ -6782,7 +7001,7 @@ const FONT_CACHE_KEYS = {
 
 // Default popular fonts (15 fonts umum)
 const DEFAULT_POPULAR_FONTS = [
-    'Inter', 'Roboto', 'Open Sans', 'Poppins', 
+    'Inter', 'Roboto', 'Open Sans', 'Poppins',
     'Lato', 'Montserrat', 'Raleway', 'Ubuntu',
     'Times New Roman', 'Arial', 'Helvetica', 'Georgia',
     'Verdana', 'Courier New', 'Comic Sans MS'
@@ -6875,10 +7094,10 @@ function createFontOption(fontFamily, fontList) {
         cardFormattingState.fontFamily = fontFamily;
         applyCardFormatting('fontFamily', fontFamily);
         saveRecentFont(fontFamily);
-        
+
         // Update font family display in toolbar
         updateFontFamilyDisplay(fontFamily);
-        
+
         // Load font if not already loaded (only for Google Fonts, skip system fonts)
         const systemFonts = ['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Verdana', 'Georgia', 'Comic Sans MS'];
         if (!systemFonts.includes(fontFamily) && !document.querySelector(`link[href*="${fontFamily.replace(/\s+/g, '+')}"]`)) {
@@ -6887,7 +7106,7 @@ function createFontOption(fontFamily, fontList) {
             link.rel = 'stylesheet';
             document.head.appendChild(link);
         }
-        
+
         document.querySelector('[data-tool="font-family"]').nextElementSibling.classList.add('hidden');
     });
     return fontOption;
@@ -6897,7 +7116,7 @@ function createFontOption(fontFamily, fontList) {
 function renderFontList(fontList, recentFonts, popularFonts, allFonts = null) {
     // Clear existing
     fontList.innerHTML = '';
-    
+
     // Recent fonts section (3 fonts)
     if (recentFonts.length > 0) {
         const recentSection = document.createElement('div');
@@ -6906,19 +7125,19 @@ function renderFontList(fontList, recentFonts, popularFonts, allFonts = null) {
         recentLabel.className = 'text-xs font-semibold text-gray-500 uppercase tracking-wide px-3 py-1';
         recentLabel.textContent = 'Baru Digunakan';
         recentSection.appendChild(recentLabel);
-        
+
         recentFonts.forEach(font => {
             recentSection.appendChild(createFontOption(font, fontList));
         });
-        
+
         fontList.appendChild(recentSection);
-        
+
         // Separator
         const separator = document.createElement('div');
         separator.className = 'border-t border-gray-200 my-2';
         fontList.appendChild(separator);
     }
-    
+
     // Popular fonts section (8 fonts)
     const popularSection = document.createElement('div');
     popularSection.className = 'mb-3';
@@ -6926,16 +7145,16 @@ function renderFontList(fontList, recentFonts, popularFonts, allFonts = null) {
     popularLabel.className = 'text-xs font-semibold text-gray-500 uppercase tracking-wide px-3 py-1';
     popularLabel.textContent = 'Font Populer';
     popularSection.appendChild(popularLabel);
-    
+
     popularFonts.forEach(font => {
         // Skip if already in recent
         if (!recentFonts.includes(font)) {
             popularSection.appendChild(createFontOption(font, fontList));
         }
     });
-    
+
     fontList.appendChild(popularSection);
-    
+
     // Store all fonts for search
     if (allFonts) {
         fontList.setAttribute('data-all-fonts', JSON.stringify(allFonts));
@@ -6979,8 +7198,10 @@ function initHeaderSetup() {
         const questionsTab = document.getElementById('tab-questions');
         if (questionsTab && !questionsTab.classList.contains('hidden')) {
             headerSetupBtn.classList.remove('hidden');
+            headerSetupBtn.classList.add('flex');
         } else {
             headerSetupBtn.classList.add('hidden');
+            headerSetupBtn.classList.remove('flex');
         }
     }
 
@@ -7120,7 +7341,7 @@ function loadHeaderTemplates() {
     const templates = window.HEADER_TEMPLATE_IMAGES || HEADER_TEMPLATE_IMAGES || [];
     console.log('Loading header templates:', templates);
     console.log('Window HEADER_TEMPLATE_IMAGES:', window.HEADER_TEMPLATE_IMAGES);
-    
+
     if (!templates || templates.length === 0) {
         console.warn('No header template images found');
         templateGrid.innerHTML = '<p class="text-sm text-gray-500 col-span-full text-center py-4">Tidak ada template tersedia</p>';
@@ -7131,7 +7352,7 @@ function loadHeaderTemplates() {
         console.log('Processing template:', template);
         const templateItem = document.createElement('div');
         templateItem.className = 'relative cursor-pointer group overflow-hidden rounded-lg bg-white';
-        
+
         const img = document.createElement('img');
         // Normalize URL to ensure absolute path
         const imageUrl = normalizeMediaUrl(template.path);
@@ -7141,7 +7362,7 @@ function loadHeaderTemplates() {
         img.className = 'w-full h-24 object-cover rounded-lg border-2 border-gray-300 group-hover:border-red-600 transition-all duration-200';
         img.style.cssText = 'display: block !important; min-height: 96px; opacity: 1 !important; visibility: visible !important; background: transparent; position: relative; z-index: 1;';
         img.loading = 'lazy';
-        img.onerror = function() {
+        img.onerror = function () {
             console.error('Failed to load template image:', imageUrl, 'Original path:', template.path);
             this.style.display = 'none';
             const errorDiv = document.createElement('div');
@@ -7149,21 +7370,21 @@ function loadHeaderTemplates() {
             errorDiv.textContent = 'Gambar tidak ditemukan';
             templateItem.appendChild(errorDiv);
         };
-        img.onload = function() {
+        img.onload = function () {
             console.log('Template image loaded successfully:', imageUrl);
             // Ensure image is visible and on top
             this.style.opacity = '1';
             this.style.visibility = 'visible';
             this.style.zIndex = '1';
         };
-        
+
         // Overlay hanya muncul saat hover, tidak menutupi gambar
         // Gunakan pseudo-element atau overlay yang benar-benar tidak menutupi saat tidak hover
         const overlay = document.createElement('div');
         overlay.className = 'absolute inset-0 rounded-lg transition-opacity flex items-center justify-center pointer-events-none';
         // Set background hanya saat hover menggunakan CSS class, bukan inline style
         overlay.style.cssText = 'z-index: 2; pointer-events: none; background-color: transparent;';
-        
+
         // Tambahkan event listener untuk hover
         templateItem.addEventListener('mouseenter', () => {
             overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
@@ -7171,7 +7392,7 @@ function loadHeaderTemplates() {
         templateItem.addEventListener('mouseleave', () => {
             overlay.style.backgroundColor = 'transparent';
         });
-        
+
         const checkIcon = document.createElement('svg');
         checkIcon.className = 'w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity';
         checkIcon.setAttribute('fill', 'none');
@@ -7180,11 +7401,11 @@ function loadHeaderTemplates() {
         checkIcon.setAttribute('stroke-width', '2');
         checkIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>';
         overlay.appendChild(checkIcon);
-        
+
         // Pastikan gambar di-render terlebih dahulu, baru overlay
         templateItem.appendChild(img);
         templateItem.appendChild(overlay);
-        
+
         // Debug: Log untuk memastikan struktur benar (setelah DOM selesai)
         setTimeout(() => {
             const computedImgStyle = window.getComputedStyle(img);
@@ -7203,7 +7424,7 @@ function loadHeaderTemplates() {
                 overlayZIndex: computedOverlayStyle.zIndex
             });
         }, 100);
-        
+
         templateItem.addEventListener('click', () => {
             // Use normalized URL for header state
             headerState.imageUrl = imageUrl;
@@ -7217,9 +7438,9 @@ function loadHeaderTemplates() {
             img.classList.add('border-red-600');
             img.classList.remove('border-gray-300');
         });
-        
+
         templateGrid.appendChild(templateItem);
-        
+
         console.log('Added template:', template.name, 'Path:', template.path);
     });
 }
@@ -7236,10 +7457,10 @@ function updateHeaderPreview() {
     }
 
     headerPreview.querySelector('.absolute').classList.add('hidden');
-    
+
     // Apply image and mode
     headerPreview.style.backgroundImage = `url(${headerState.imageUrl})`;
-    
+
     // Apply mode
     switch (headerState.imageMode) {
         case 'stretch':
@@ -7289,7 +7510,7 @@ function applyHeaderToForm() {
     }
 
     headerElement.style.backgroundImage = `url(${headerState.imageUrl})`;
-    
+
     // Apply mode
     switch (headerState.imageMode) {
         case 'stretch':
@@ -7340,17 +7561,17 @@ function removeHeaderFromForm() {
 async function loadGoogleFonts() {
     const fontList = document.getElementById('font-family-list');
     if (!fontList) return;
-    
+
     // If already rendered, don't reload
     if (fontList.children.length > 0) return;
-    
+
     // Get recent and popular fonts
     const recentFonts = getRecentFonts();
     const popularFonts = getPopularFonts();
-    
+
     // Try to get from cache first
     let allFonts = getAllFontsFromCache();
-    
+
     if (!allFonts) {
         try {
             // Fetch from Google Fonts API
@@ -7358,7 +7579,7 @@ async function loadGoogleFonts() {
             const data = await response.json();
             allFonts = data.items || [];
             saveAllFontsToCache(allFonts);
-            
+
             // Update popular fonts from fetched data (first 15 most popular)
             if (allFonts.length > 0) {
                 const fetchedPopular = allFonts.slice(0, 15).map(font => font.family);
@@ -7380,7 +7601,7 @@ async function loadGoogleFonts() {
             allFonts = [];
         }
     }
-    
+
     // Render with recent and popular fonts
     renderFontList(fontList, recentFonts, popularFonts, allFonts);
 }
@@ -7389,9 +7610,9 @@ async function loadGoogleFonts() {
 function filterFonts(searchTerm) {
     const fontList = document.getElementById('font-family-list');
     if (!fontList) return;
-    
+
     const term = searchTerm.toLowerCase().trim();
-    
+
     // If search is empty, show recent + popular
     if (!term) {
         const fontOptions = document.querySelectorAll('.font-option');
@@ -7407,7 +7628,7 @@ function filterFonts(searchTerm) {
         });
         return;
     }
-    
+
     // Get all fonts from cache
     const allFontsData = fontList.getAttribute('data-all-fonts');
     if (!allFontsData) {
@@ -7432,24 +7653,24 @@ function filterFonts(searchTerm) {
         });
         return;
     }
-    
+
     try {
         const allFonts = JSON.parse(allFontsData);
-        
+
         // Filter fonts that match search term
         const matchingFonts = allFonts
             .filter(font => font.family.toLowerCase().includes(term))
             .slice(0, 8); // Limit to 8 recommendations
-        
+
         // Clear and render recommendations
         fontList.innerHTML = '';
-        
+
         if (matchingFonts.length > 0) {
             const recommendationsLabel = document.createElement('div');
             recommendationsLabel.className = 'text-xs font-semibold text-gray-500 uppercase tracking-wide px-3 py-1';
             recommendationsLabel.textContent = 'Rekomendasi';
             fontList.appendChild(recommendationsLabel);
-            
+
             matchingFonts.forEach(font => {
                 fontList.appendChild(createFontOption(font.family, fontList));
             });
@@ -7520,5 +7741,91 @@ function resetCardFormatting() {
         } else {
             activeInput.removeAttribute(`data-${key}`);
         }
+    });
+}
+
+// Custom Dialog / Modal function
+function showDialog({ title, message, type = 'info', onConfirm, onCancel, confirmText = 'Ya', cancelText = 'Batal' }) {
+    // Create modal container
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 opacity-0';
+    modal.id = 'custom-dialog-modal';
+
+    // Determine icon and color based on type
+    let icon = '';
+    let confirmBtnClass = '';
+    let iconClass = '';
+
+    if (type === 'danger') {
+        icon = '<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+        confirmBtnClass = 'bg-red-600 hover:bg-red-700 text-white';
+        iconClass = 'bg-red-100';
+    } else if (type === 'warning') {
+        icon = '<svg class="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+        confirmBtnClass = 'bg-orange-600 hover:bg-orange-700 text-white';
+        iconClass = 'bg-orange-100';
+    } else {
+        icon = '<svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+        confirmBtnClass = 'bg-blue-600 hover:bg-blue-700 text-white';
+        iconClass = 'bg-blue-100';
+    }
+
+    // Modal Content
+    modal.innerHTML = `
+        <div class="bg-white rounded-lg shadow-xl transform transition-all scale-95 opacity-0 sm:max-w-lg sm:w-full p-6">
+            <div class="sm:flex sm:items-start">
+                <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${iconClass} sm:mx-0 sm:h-10 sm:w-10">
+                    ${icon}
+                </div>
+                <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                        ${title}
+                    </h3>
+                    <div class="mt-2">
+                        <p class="text-sm text-gray-500">
+                            ${message}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                <button type="button" id="dialog-confirm-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${confirmBtnClass}">
+                    ${confirmText}
+                </button>
+                <button type="button" id="dialog-cancel-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:w-auto sm:text-sm">
+                    ${cancelText}
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Animate in
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        const content = modal.querySelector('div');
+        content.classList.remove('scale-95', 'opacity-0');
+        content.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    const closeDialog = () => {
+        modal.classList.add('opacity-0');
+        const content = modal.querySelector('div');
+        content.classList.remove('scale-100', 'opacity-100');
+        content.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            modal.remove();
+        }, 300);
+    };
+
+    document.getElementById('dialog-confirm-btn').addEventListener('click', () => {
+        if (onConfirm) onConfirm();
+        closeDialog();
+    });
+
+    document.getElementById('dialog-cancel-btn').addEventListener('click', () => {
+        if (onCancel) onCancel();
+        closeDialog();
     });
 }

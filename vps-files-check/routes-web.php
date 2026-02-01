@@ -26,14 +26,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/forms/{form}/responses/data', [FormController::class, 'responsesData'])->name('forms.responses.data');
     Route::get('/forms/{form}/responses/export/summary', [FormController::class, 'exportSummary'])->name('forms.responses.export.summary');
     Route::get('/forms/{form}/responses/export/individual', [FormController::class, 'exportIndividual'])->name('forms.responses.export.individual');
-    Route::get('/forms/{form}/export-individual-single/{responseId}', [FormController::class, 'exportIndividualSingle'])->name('forms.responses.export.individual.single');
     Route::post('/forms', [FormController::class, 'store'])->name('forms.store');
     Route::put('/forms/{form}', [FormController::class, 'update'])->name('forms.update');
     Route::delete('/forms/{form}', [FormController::class, 'destroy'])->name('forms.destroy');
     Route::delete('/forms/{form}/answer-templates/{template}', [FormController::class, 'destroyAnswerTemplate'])->name('forms.answer-templates.destroy');
     Route::delete('/forms/{form}/result-rules/{rule}', [FormController::class, 'destroyResultRule'])->name('forms.result-rules.destroy');
     Route::post('/forms/{form}/rules', [FormController::class, 'updateRules'])->name('forms.rules.store');
-    Route::delete('/forms/{form}/rule-groups/{ruleGroupId}', [FormController::class, 'destroyRuleGroup'])->name('forms.rule-groups.destroy');
     Route::delete('/forms/{form}/setting-results/{ruleGroupId}', [FormController::class, 'destroySettingResultsByGroup'])->name('forms.setting-results.destroy-group');
 });
 

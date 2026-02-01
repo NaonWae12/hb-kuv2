@@ -16,10 +16,14 @@ class Section extends Model
         'image_alignment',
         'image_wrap_mode',
         'order',
+        'calculate_subtotal',
+        'include_in_total',
     ];
     
     protected $casts = [
         'order' => 'integer',
+        'calculate_subtotal' => 'boolean',
+        'include_in_total' => 'boolean',
     ];
 
     // Relationships

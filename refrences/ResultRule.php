@@ -6,23 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class FormResponse extends Model
+class ResultRule extends Model
 {
     protected $fillable = [
         'form_id',
-        'email',
-        'total_score',
-        'result_text',
-        'ip_address',
-        'user_agent',
-        'section_scores',
-        'derived_metrics',
+        'condition_type',
+        'min_score',
+        'max_score',
+        'single_score',
+        'order',
+        'rule_group_id',
     ];
 
     protected $casts = [
-        'total_score' => 'integer',
-        'section_scores' => 'array',
-        'derived_metrics' => 'array',
+        'min_score' => 'integer',
+        'max_score' => 'integer',
+        'single_score' => 'integer',
     ];
 
     // Relationships
@@ -31,8 +30,8 @@ class FormResponse extends Model
         return $this->belongsTo(Form::class);
     }
 
-    public function answers(): HasMany
+    public function texts(): HasMany
     {
-        return $this->hasMany(ResponseAnswer::class);
+        return $this->hasMany(ResultRuleText::class)->orderBy('order');
     }
 }
