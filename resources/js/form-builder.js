@@ -4,6 +4,8 @@ let questionCounter = 0;
 let sectionCounter = 0;
 let requestBuilderResponsesData = null;
 let chartJsLoadingPromise = null;
+
+let formRuleGroups = {}; // Store rule group titles
 const dragAndDropState = {
     container: null,
     source: null,
@@ -576,6 +578,7 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
             const sectionInfo = sectionList[currentSectionIndex] || null;
             const sectionDivider = createSectionDivider(sectionInfo?.id);
             container.appendChild(sectionDivider);
+            attachSectionEvents(sectionDivider);
 
             // Using existing sectionInfo
             const sectionTitleInput = sectionDivider.querySelector('.section-title-input');
@@ -614,15 +617,16 @@ function renderQuestionsIncrementally({ questions, sections, container, onComple
             }
 
             // Load Section Scoring Settings
-            if (sectionInfo) {
-                const calculateSubtotalCheckbox = sectionDivider.querySelector('.calculate-subtotal-checkbox');
-                const includeInTotalCheckbox = sectionDivider.querySelector('.include-in-total-checkbox');
-                if (calculateSubtotalCheckbox) {
-                    calculateSubtotalCheckbox.checked = Boolean(sectionInfo.calculate_subtotal);
-                }
-                if (includeInTotalCheckbox) {
-                    includeInTotalCheckbox.checked = sectionInfo.include_in_total !== undefined ? Boolean(sectionInfo.include_in_total) : true;
-                }
+            const calculateSubtotalCheckbox = sectionDivider.querySelector('.calculate-subtotal-checkbox');
+            const includeInTotalCheckbox = sectionDivider.querySelector('.include-in-total-checkbox');
+
+            if (calculateSubtotalCheckbox) {
+                calculateSubtotalCheckbox.checked = sectionInfo ? Boolean(sectionInfo.calculate_subtotal) : false;
+            }
+            if (includeInTotalCheckbox) {
+                includeInTotalCheckbox.checked = (sectionInfo && sectionInfo.include_in_total !== undefined)
+                    ? Boolean(sectionInfo.include_in_total)
+                    : true;
             }
 
             if (sectionDescInput && sectionInfo && sectionInfo.description) {
@@ -1411,8 +1415,9 @@ function createResultSettingCard() {
                         </div>
                         <div class="flex-1">
                             <label class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1 block">Pilih Aturan Hasil</label>
-                            <select class="result-setting-rule-select w-full text-sm border border-gray-300 rounded-lg focus:outline-none_focus:ring-1 focus:ring-red-500">
+                            <select class="result-setting-rule-select w-full text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500">
                                 <option value="">-- Pilih Aturan --</option>
+                                <option value="active-default" data-rule-type="active" data-rule-group-id="default">Aturan Umum (Skor Total)</option>
                                 ${resultRuleOptions}
                             </select>
                         </div>
@@ -3295,6 +3300,120 @@ function setupBuilderResponses(options) {
         }
 
         answersContainer.innerHTML = '';
+
+        // Render Interpreted Result (Rich Structure)
+        if (data.derived_metrics && data.derived_metrics.result_details) {
+            const resultDetails = data.derived_metrics.result_details;
+            if (resultDetails.texts && resultDetails.texts.length > 0) {
+                const resultsWrapper = document.createElement('div');
+                resultsWrapper.className = 'mb-6 space-y-4';
+
+                resultDetails.texts.forEach(text => {
+                    const card = document.createElement('div');
+                    card.className = 'p-5 bg-green-50 border border-green-100 rounded-xl shadow-sm';
+
+                    const ruleGroupTitle = formRuleGroups[text.rule_group_id];
+                    console.log('Rendering Result Text:', {
+                        text_rule_group_id: text.rule_group_id,
+                        ruleGroupTitle: ruleGroupTitle,
+                        allGroups: formRuleGroups
+                    });
+                    const displayTitle = ruleGroupTitle || text.title || 'Interpretasi Hasil';
+
+                    let content = `
+                        <div class="flex items-center space-x-2 mb-3">
+                            <div class="w-2 h-4 bg-green-500 rounded-full"></div>
+                            <p class="text-xs font-bold text-green-700 uppercase tracking-widest">${displayTitle}</p>
+                        </div>
+                    `;
+
+                    if (text.image_url) {
+                        content += `
+                            <div class="mb-4 flex justify-center">
+                                <img src="${text.image_url}" class="max-w-full h-auto rounded-lg border border-green-100 shadow-sm" style="max-height: 250px;">
+                            </div>
+                        `;
+                    }
+
+                    content += `<div class="text-sm text-gray-800 leading-relaxed whitespace-pre-line">${text.result_text}</div>`;
+
+                    card.innerHTML = content;
+                    resultsWrapper.appendChild(card);
+                });
+
+                answersContainer.appendChild(resultsWrapper);
+            }
+        } else if (data.result_text) {
+            // Fallback for legacy plain text results
+            const resultWrapper = document.createElement('div');
+            resultWrapper.className = 'mb-6 p-5 bg-green-50 border border-green-100 rounded-xl shadow-sm';
+            resultWrapper.innerHTML = `
+                <div class="flex items-center space-x-2 mb-3">
+                    <div class="w-2 h-4 bg-green-500 rounded-full"></div>
+                    <p class="text-xs font-bold text-green-700 uppercase tracking-widest">Interpretasi Hasil</p>
+                </div>
+                <div class="text-sm text-gray-800 leading-relaxed whitespace-pre-line">${data.result_text}</div>
+            `;
+            answersContainer.appendChild(resultWrapper);
+        }
+
+        // Render Derived Metrics (BMI, etc.)
+        if (data.derived_metrics && Object.keys(data.derived_metrics).length > 0) {
+            const metricsWrapper = document.createElement('div');
+            metricsWrapper.className = 'mb-6 p-4 bg-red-50 border border-red-100 rounded-xl';
+            metricsWrapper.innerHTML = `<p class="text-xs font-bold text-red-600 uppercase tracking-wider mb-3">Analisis Kesehatan</p>`;
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+
+            Object.entries(data.derived_metrics).forEach(([key, metric]) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-3 rounded-lg border border-red-100 shadow-sm';
+                card.innerHTML = `
+                    <p class="text-[10px] text-gray-500 font-medium uppercase">${metric.label}</p>
+                    <div class="flex items-baseline space-x-1">
+                        <span class="text-xl font-bold text-red-700">${metric.value}</span>
+                        <span class="text-xs text-red-400">${key === 'bmi' ? 'kg/m²' : ''}</span>
+                    </div>
+                    ${metric.category ? `<p class="text-xs font-bold text-red-600 mt-1">${metric.category}</p>` : ''}
+                    ${key === 'bmi' && metric.weight && metric.height ? `<p class="text-[9px] text-gray-400 mt-1">BB: ${metric.weight}kg, TB: ${metric.height}cm</p>` : ''}
+                `;
+                grid.appendChild(card);
+            });
+            metricsWrapper.appendChild(grid);
+            answersContainer.appendChild(metricsWrapper);
+        }
+
+        // Render Section Scores
+        if (data.section_scores && Object.keys(data.section_scores).length > 0) {
+            const scoresWrapper = document.createElement('div');
+            scoresWrapper.className = 'mb-6 p-4 bg-gray-50 border border-gray-100 rounded-xl';
+            scoresWrapper.innerHTML = `<p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Skor per Bagian</p>`;
+
+            const list = document.createElement('div');
+            list.className = 'space-y-3';
+
+            Object.entries(data.section_scores).forEach(([id, sData]) => {
+                const item = document.createElement('div');
+                item.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-medium text-gray-700">${stripHTMLAndDecode(sData.title || 'Bagian')}</span>
+                        <span class="text-xs font-bold text-red-600">${sData.score}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-1.5">
+                        <div class="bg-red-500 h-1.5 rounded-full" style="width: 100%"></div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+            scoresWrapper.appendChild(list);
+            answersContainer.appendChild(scoresWrapper);
+        }
+
+        const answersLabel = document.createElement('p');
+        answersLabel.className = 'text-xs font-bold text-gray-500 uppercase tracking-wider mb-3';
+        answersLabel.textContent = 'Rincian Jawaban';
+        answersContainer.appendChild(answersLabel);
         if (!Array.isArray(data.answers) || !data.answers.length) {
             const empty = document.createElement('p');
             empty.className = 'text-sm text-gray-500';
@@ -4597,9 +4716,9 @@ function collectFormData(options = {}) {
             const selectedThemeButton = document.querySelector('[data-theme-color][data-selected="true"]');
             return selectedThemeButton ? selectedThemeButton.getAttribute('data-theme-color') : 'red';
         })(),
-        collect_email: document.querySelectorAll('#tab-settings input[type="checkbox"]')[0]?.checked || false,
-        limit_one_response: document.querySelectorAll('#tab-settings input[type="checkbox"]')[1]?.checked || false,
-        show_progress_bar: document.querySelectorAll('#tab-settings input[type="checkbox"]')[2]?.checked || false,
+        collect_email: document.getElementById('collect-email')?.checked || false,
+        limit_one_response: document.getElementById('limit-one-response')?.checked || false,
+        show_progress_bar: document.getElementById('show-progress-bar')?.checked || false,
         shuffle_questions: document.getElementById('shuffle-questions')?.checked || false,
         use_bmi_formula: useBmiFormula,
         bmi_mapping: {},
@@ -4643,8 +4762,8 @@ function collectFormData(options = {}) {
             image: imageValueInput?.value?.trim() || null,
             image_alignment: alignmentSelect?.value || 'center',
             image_wrap_mode: wrapModeSelect?.value || 'fixed',
-            calculate_subtotal: section.querySelector('.calculate-subtotal-checkbox')?.checked || false,
-            include_in_total: section.querySelector('.include-in-total-checkbox')?.checked || true,
+            calculate_subtotal: section.querySelector('.calculate-subtotal-checkbox')?.checked === true,
+            include_in_total: section.querySelector('.include-in-total-checkbox')?.checked !== false,
         });
     });
 
@@ -4677,8 +4796,8 @@ function collectFormData(options = {}) {
             }
         }
 
-        // Gunakan rule_group_id yang sudah ada jika ada, atau generate baru
-        const ruleGroupId = existingRuleGroupId || ((hasAnswerTemplates || hasResultRules) ? generateRuleGroupId() : null);
+        // Use existing group ID if available, otherwise use current editing group ID or null
+        const ruleGroupId = existingRuleGroupId || editingRuleGroupId || null;
 
         answerTemplates.forEach((template) => {
             const answerText = template.querySelector('.answer-template-text')?.value;
@@ -4841,9 +4960,9 @@ function collectFormData(options = {}) {
             }
         }
 
-        if (questionData.title) {
-            formData.questions.push(questionData);
-        }
+        // Always push question regardless of title to avoid data loss
+        // The backend will handle empty titles by defaulting to 'Pertanyaan tanpa judul'
+        formData.questions.push(questionData);
     });
 
     // Collect result settings and result text settings (new structure)
@@ -5439,6 +5558,9 @@ function populateFormBuilder(data) {
         // Clear all questions, sections, and result settings
         questionsContainer.innerHTML = '';
     }
+
+    // Populate rule groups map
+    formRuleGroups = data.rule_groups || {};
 
     // Load header data
     if (data.header && typeof headerState !== 'undefined') {
@@ -6597,13 +6719,22 @@ function mergeStyles(parentStyle, innerStyle) {
 // Get HTML content from contenteditable (preserves formatting like bold, italic, underline)
 function getHTMLFromContentEditable(element) {
     if (!element) return '';
-    if (element.contentEditable === 'true') {
+
+    // For contenteditable elements
+    if (element.contentEditable === 'true' || element.getAttribute('contenteditable') === 'true') {
         const html = element.innerHTML || '';
-        // Normalize HTML to remove nested spans before sending to backend
-        return normalizeHTML(html);
+        const normalized = normalizeHTML(html);
+
+        // If normalization made it empty but there's raw text, fallback to text
+        if (!normalized.trim() && element.innerText.trim()) {
+            return `<span>${element.innerText.trim()}</span>`;
+        }
+
+        return normalized;
     }
-    // For regular input/textarea, return as plain text wrapped in a span or just return value
-    const value = element.value || '';
+
+    // For regular input/textarea
+    const value = (element.value || '').trim();
     return value ? `<span>${value.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : '';
 }
 

@@ -331,10 +331,11 @@ class PublicFormController extends Controller
         $answers = $validated['answers'] ?? [];
         $totalScore = 0;
         $sectionScores = [];
+        $groupScores = [];
         $derivedMetrics = [];
         $finalResultData = null;
 
-        DB::transaction(function () use ($form, $validated, $answers, &$totalScore, &$sectionScores, &$derivedMetrics, &$finalResultData, $request, $allQuestions, $answerTemplateScoreMap) {
+        DB::transaction(function () use ($form, $validated, $answers, &$totalScore, &$sectionScores, &$groupScores, &$derivedMetrics, &$finalResultData, $request, $allQuestions, $answerTemplateScoreMap) {
             $formResponse = FormResponse::create([
                 'form_id' => $form->id,
                 'email' => $validated['email'] ?? null,
@@ -367,6 +368,7 @@ class PublicFormController extends Controller
                 $sectionId = $questionSectionMap[$question->id] ?? null;
                 $options = $question->options->keyBy('id');
                 $questionScore = 0;
+                $option = null; // Reset option for each question to avoid leakage from previous iteration
 
                 if ($question->type === 'checkbox') {
                     $selectedOptions = is_array($answerValue) ? $answerValue : [$answerValue];
@@ -387,6 +389,11 @@ class PublicFormController extends Controller
                             'answer_text' => $option->text,
                             'score' => $score ?? 0,
                         ]);
+                        // Track score per rule group if applicable
+                        $ruleGroupId = $option && $option->answerTemplate ? $option->answerTemplate->rule_group_id : null;
+                        if ($ruleGroupId) {
+                            $groupScores[$ruleGroupId] = ($groupScores[$ruleGroupId] ?? 0) + ($score ?? 0);
+                        }
                     }
                 } elseif (in_array($question->type, ['multiple-choice', 'dropdown'], true)) {
                     $option = $options->get((int) $answerValue);
@@ -404,6 +411,12 @@ class PublicFormController extends Controller
                             'answer_text' => $option->text,
                             'score' => $questionScore,
                         ]);
+
+                        // Track score per rule group if applicable
+                        $ruleGroupId = $option && $option->answerTemplate ? $option->answerTemplate->rule_group_id : null;
+                        if ($ruleGroupId) {
+                            $groupScores[$ruleGroupId] = ($groupScores[$ruleGroupId] ?? 0) + $questionScore;
+                        }
                     }
                 } else {
                     $textAnswer = is_array($answerValue) ? implode(', ', $answerValue) : $answerValue;
@@ -415,11 +428,18 @@ class PublicFormController extends Controller
                     ]);
                 }
 
-                // Update section score and total score
+                // Update section score or global total score
                 if ($sectionId && isset($sectionScores[$sectionId])) {
                     $sectionScores[$sectionId]['score'] += $questionScore;
+                } else {
+                    $totalScore += $questionScore;
                 }
             }
+
+            // Filter section scores to only include those with calculate_subtotal = true for session display
+            $displaySectionScores = array_filter($sectionScores, function($s) {
+                return !empty($s['calculate_subtotal']);
+            });
 
             // Finalize total score based on section settings
             foreach ($sectionScores as $sId => $sData) {
@@ -439,17 +459,42 @@ class PublicFormController extends Controller
                 if (is_numeric($weight) && is_numeric($height) && $height > 0) {
                     $heightInMeters = $height / 100;
                     $bmi = $weight / ($heightInMeters * $heightInMeters);
+                    $bmiValue = round($bmi, 2);
+                    
+                    // BMI Classification (Kemenkes/Asia-Pacific)
+                    $category = 'Tidak Diketahui';
+                    if ($bmiValue < 18.5) {
+                        $category = 'BB kurang';
+                    } elseif ($bmiValue >= 18.5 && $bmiValue <= 22.9) {
+                        $category = 'BB normal';
+                    } elseif ($bmiValue >= 23.0 && $bmiValue <= 24.9) {
+                        $category = 'Berisiko menjadi obesitas';
+                    } elseif ($bmiValue >= 25.0 && $bmiValue <= 29.9) {
+                        $category = 'Obesitas tingkat I';
+                    } elseif ($bmiValue >= 30.0) {
+                        $category = 'Obesitas tingkat II';
+                    }
+
                     $derivedMetrics['bmi'] = [
                         'label' => 'Indeks Massa Tubuh (IMT)',
-                        'value' => round($bmi, 2),
+                        'value' => $bmiValue,
+                        'category' => 'Kategori: ' . $category,
                         'weight' => $weight,
                         'height' => $height,
                     ];
                 }
             }
 
-            $resultData = $this->resolveResultText($form, $totalScore);
+            $resultData = $this->resolveResultText($form, $totalScore, $groupScores);
             $finalResultData = $resultData;
+
+            if ($resultData) {
+                $derivedMetrics['result_details'] = $resultData;
+            }
+            
+            if (!empty($groupScores)) {
+                $derivedMetrics['group_scores'] = $groupScores;
+            }
 
             $resultTextPlain = null;
             if ($resultData && isset($resultData['texts'])) {
@@ -467,7 +512,10 @@ class PublicFormController extends Controller
         return redirect()
             ->route('forms.public.show', $form)
             ->with('status', 'Terima kasih! Jawaban Anda telah disimpan.')
-            ->with('result_data', $finalResultData);
+            ->with('result_data', array_merge($finalResultData ?? [], [
+                'section_scores' => $displaySectionScores ?? [],
+                'derived_metrics' => $derivedMetrics,
+            ]));
     }
 
     private function buildQuestionValidation(int $questionId, bool $isRequired, string $type, array &$rules, array &$messages): void
@@ -489,81 +537,89 @@ class PublicFormController extends Controller
         }
     }
 
-    private function resolveResultText(Form $form, int $totalScore): ?array
+    private function resolveResultText(Form $form, int $totalScore, array $groupScores = []): ?array
     {
-        $matchingRule = $form->resultRules
-            ->sortBy('order')
-            ->first(function ($rule) use ($totalScore) {
+        // Group rules by their rule_group_id
+        $rulesByGroup = $form->resultRules->groupBy(function($rule) {
+            return $rule->rule_group_id ?? 'default';
+        });
+
+        $allTexts = [];
+        $textAlignment = 'center';
+        $imageAlignment = 'center';
+
+        foreach ($rulesByGroup as $groupId => $rules) {
+            // Determine the score to use for this group
+            // Fallback to totalScore if specific group score is not provided
+            $scoreToUse = ($groupId === 'default' || !isset($groupScores[$groupId])) ? $totalScore : $groupScores[$groupId];
+
+            // Find ALL matching rules in this group (not just the first one)
+            $matchingRules = $rules->sortBy('order')->filter(function ($rule) use ($scoreToUse) {
                 return match ($rule->condition_type) {
-                    'range' => ($rule->min_score === null || $totalScore >= $rule->min_score)
-                        && ($rule->max_score === null || $totalScore <= $rule->max_score),
-                    'equal' => $rule->single_score !== null && $totalScore === $rule->single_score,
-                    'greater' => $rule->single_score !== null && $totalScore > $rule->single_score,
-                    'less' => $rule->single_score !== null && $totalScore < $rule->single_score,
+                    'range' => ($rule->min_score === null || $scoreToUse >= $rule->min_score)
+                        && ($rule->max_score === null || $scoreToUse <= $rule->max_score),
+                    'equal' => $rule->single_score !== null && $scoreToUse === $rule->single_score,
+                    'greater' => $rule->single_score !== null && $scoreToUse > $rule->single_score,
+                    'less' => $rule->single_score !== null && $scoreToUse < $rule->single_score,
                     default => false,
                 };
             });
 
-        if (! $matchingRule) {
-            Log::warning('No matching result rule found', [
-                'form_id' => $form->id,
-                'total_score' => $totalScore,
-            ]);
-            return null;
-        }
+            if ($matchingRules->isEmpty()) {
+                // Fallback: If score exceeds all defined ranges, use the one with the highest max_score
+                $highestRangeRule = $rules->where('condition_type', 'range')
+                    ->whereNotNull('max_score')
+                    ->sortByDesc('max_score')
+                    ->first();
+                
+                if ($highestRangeRule && $scoreToUse > $highestRangeRule->max_score) {
+                    $matchingRules = collect([$highestRangeRule]);
+                } else {
+                    continue;
+                }
+            }
 
-        // Get all texts from matching rule (ordered by order)
-        $allRuleTexts = $matchingRule->texts->sortBy('order')->values();
+            foreach ($matchingRules as $matchingRule) {
+                // Get settings (titles, images) for this rule group package
+                $settingResults = SettingResult::where('form_id', $form->id)
+                    ->where('rule_group_id', $matchingRule->rule_group_id)
+                    ->with('resultRuleText')
+                    ->orderBy('order')
+                    ->get()
+                    ->keyBy('result_rule_text_id');
 
-        if ($allRuleTexts->isEmpty()) {
-            return null;
-        }
+                if ($settingResults->isNotEmpty()) {
+                    $textAlignment = $settingResults->first()->text_alignment ?? $textAlignment;
+                    $imageAlignment = $settingResults->first()->image_alignment ?? $imageAlignment;
+                }
 
-        $ruleGroupId = $matchingRule->rule_group_id;
+                $matchingRule->texts->sortBy('order')->each(function ($ruleText) use (&$allTexts, $settingResults, $matchingRule) {
+                    $setting = $settingResults ? $settingResults->get($ruleText->id) : null;
+                    $title = $setting ? $setting->title : null;
+                    $image = $setting ? $setting->image : null;
+                    $resultText = $ruleText->result_text;
 
-        // Load setting_results for this rule_group_id (if exists)
-        $settingResults = null;
-        $textAlignment = 'center';
-        $imageAlignment = 'center';
-
-        if ($ruleGroupId) {
-            $settingResults = SettingResult::where('form_id', $form->id)
-                ->where('rule_group_id', $ruleGroupId)
-                ->with('resultRuleText')
-                ->orderBy('order')
-                ->get()
-                ->keyBy('result_rule_text_id');
-
-            // Get alignment from first setting if exists
-            if ($settingResults->isNotEmpty()) {
-                $firstSetting = $settingResults->first();
-                $textAlignment = $firstSetting->text_alignment ?? 'center';
-                $imageAlignment = $firstSetting->image_alignment ?? 'center';
+                    if (!empty($resultText) || !empty($title) || !empty($image)) {
+                        $allTexts[] = [
+                            'rule_group_id' => $matchingRule->rule_group_id,
+                            'title' => $title,
+                            'image' => $image,
+                            'image_url' => $image ? asset($image) : null,
+                            'result_text' => $resultText,
+                        ];
+                    }
+                });
             }
         }
 
-        // Build texts array: get all texts from rule, merge with settings if available
-        $texts = $allRuleTexts->map(function ($ruleText) use ($settingResults) {
-            $setting = $settingResults ? $settingResults->get($ruleText->id) : null;
-
-            return [
-                'title' => $setting ? $setting->title : null,
-                'image' => $setting ? $setting->image : null,
-                'image_url' => $setting && $setting->image ? asset($setting->image) : null,
-                'result_text' => $ruleText->result_text ?? '',
-            ];
-        })->filter(function ($text) {
-            return !empty($text['result_text']);
-        })->values()->toArray();
-
-        if (empty($texts)) {
+        if (empty($allTexts)) {
             return null;
         }
 
         return [
             'text_alignment' => $textAlignment,
             'image_alignment' => $imageAlignment,
-            'texts' => $texts,
+            'texts' => $allTexts,
         ];
     }
 

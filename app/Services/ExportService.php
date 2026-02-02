@@ -147,6 +147,12 @@ class ExportService
 
                 $section->addText('Jawaban #' . ($response['position'] ?? ($index + 1)), ['bold' => true, 'size' => 14, 'color' => 'B91C1C'], ['spaceAfter' => 120]);
 
+                // Fetch rule group titles for this form
+                $ruleGroupTitles = $form->ruleGroups()->pluck('title', 'rule_group_id')->toArray();
+
+                // Map interpreted results by group for easy access
+                $textsByGroup = collect($response['derived_metrics']['result_details']['texts'] ?? [])->groupBy('rule_group_id');
+
                 // Metadata Table
                 $metaTable = $section->addTable($headerTableStyle);
                 $metaTable->addRow();
@@ -159,6 +165,30 @@ class ExportService
                     $metaTable->addRow();
                     $metaTable->addCell(2500)->addText('Skor Total', ['bold' => true]);
                     $metaTable->addCell(7500)->addText(': ' . $response['total_score'], ['bold' => true]);
+                }
+
+                if (isset($response['derived_metrics']['bmi'])) {
+                    $bmi = $response['derived_metrics']['bmi'];
+                    $metaTable->addRow();
+                    $metaTable->addCell(2500)->addText('IMT (BMI)', ['bold' => true]);
+                    $bmiText = ": " . ($bmi['value'] ?? '-') . " (" . ($bmi['category'] ?? '-') . ")";
+                    $metaTable->addCell(7500)->addText($bmiText, ['bold' => true, 'color' => 'B91C1C']);
+                    
+                    if (isset($bmi['weight']) && isset($bmi['height'])) {
+                        $metaTable->addRow();
+                        $metaTable->addCell(2500)->addText('BB / TB', ['bold' => true]);
+                        $metaTable->addCell(7500)->addText(": " . $bmi['weight'] . " kg / " . $bmi['height'] . " cm");
+                    }
+
+                    // BMI Interpretation Fallback
+                    $bmiTexts = $textsByGroup->get('bmi') ?? $textsByGroup->get('BMI');
+                    if ($bmiTexts) {
+                        foreach ($bmiTexts as $bt) {
+                            $metaTable->addRow();
+                            $metaTable->addCell(2500)->addText('Simpulan IMT', ['bold' => true]);
+                            $metaTable->addCell(7500)->addText(': ' . $this->htmlService->stripHtml($bt['result_text'] ?? '-'), ['italic' => true]);
+                        }
+                    }
                 }
 
                 $section->addTextBreak(1);
@@ -193,12 +223,29 @@ class ExportService
                                 $table->addCell(1500)->addText($answer['score'] ?? '0', [], ['alignment' => Jc::CENTER]);
                             }
 
-                            // Subtotal Row
-                            if ($sec['calculate_subtotal'] && isset($sectionScores[$sec['id']])) {
+                            // Subtotal Row & Interpretation
+                            if (isset($sec['calculate_subtotal']) && $sec['calculate_subtotal'] && isset($sectionScores[(string)$sec['id']])) {
                                 $table->addRow();
                                 $cell = $table->addCell(10000, ['bgColor' => 'FFF5F5', 'gridSpan' => 3]);
                                 $sectionTitle = $this->htmlService->stripHtml($sec['title'] ?? '');
-                                $cell->addText("Subtotal Bagian ($sectionTitle): " . $sectionScores[$sec['id']]['score'], ['bold' => true, 'color' => 'B91C1C'], ['alignment' => Jc::RIGHT]);
+                                $score = $sectionScores[(string)$sec['id']]['score'];
+                                $cell->addText("Subtotal Bagian ($sectionTitle): $score", ['bold' => true, 'color' => 'B91C1C'], ['alignment' => Jc::RIGHT]);
+                                
+                                // Add Kesimpulan for this section
+                                $groupTexts = $textsByGroup->get($sec['id']);
+                                if ($groupTexts) {
+                                    foreach ($groupTexts as $gt) {
+                                        $customTitle = $ruleGroupTitles[$sec['id']] ?? 'Kesimpulan';
+                                        $cell->addText($customTitle . ": " . $this->htmlService->stripHtml($gt['result_text'] ?? ''), ['bold' => true, 'italic' => true], ['alignment' => Jc::LEFT]);
+                                        
+                                        if (!empty($gt['image'])) {
+                                            $imagePath = public_path($gt['image']);
+                                            if (file_exists($imagePath)) {
+                                                $cell->addImage($imagePath, ['width' => 100, 'alignment' => Jc::LEFT]);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -222,23 +269,46 @@ class ExportService
                     $table->addCell(10000, ['gridSpan' => 3])->addText('Tidak ada jawaban.', ['italic' => true]);
                 }
 
-                // Derived Metrics & Result Text (Outside Table)
-                if (!empty($response['derived_metrics']) || !empty($response['result_text'])) {
-                    $section->addTextBreak(1);
-                    $extraTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 50]);
-
-                    if (!empty($response['derived_metrics'])) {
-                        foreach ($response['derived_metrics'] as $metric) {
-                            $extraTable->addRow();
-                            $extraTable->addCell(10000)->addText($metric['label'] . ': ' . $metric['value'], ['bold' => true, 'size' => 12]);
-                        }
+                // General Results (Total Score) - Iterate over ALL texts regardless of group
+                // Note: We used to only get 'default', but now form service might assign specific groups to everything.
+                // We should display all of them unless they belong to specific sections that we want to exclude (but here we want to show all final interpretations).
+                
+                $allResultTexts = collect([]);
+                if ($textsByGroup) {
+                    foreach ($textsByGroup as $groupId => $texts) {
+                        $allResultTexts = $allResultTexts->concat($texts);
                     }
+                }
 
-                    if (!empty($response['result_text'])) {
-                        $extraTable->addRow();
-                        $cell = $extraTable->addCell(10000);
-                        $cell->addText('Kesimpulan:', ['bold' => true, 'underline' => 'single', 'size' => 12], ['spaceBefore' => 120]);
-                        $this->formatResultTextForWord($response['result_text'], $cell);
+                if ($allResultTexts->isNotEmpty()) {
+                    $section->addTextBreak(1);
+                    foreach ($allResultTexts as $gt) {
+                        $groupId = $gt['rule_group_id'] ?? null;
+                        $customTitle = null;
+                        if ($groupId !== null && isset($ruleGroupTitles[$groupId])) {
+                            $customTitle = $ruleGroupTitles[$groupId];
+                        }
+
+                        // Use custom Rule Group Title if available, otherwise fallback to Text Title or 'Kesimpulan'
+                        // This matches the logic in Form Builder JS
+                        $displayTitle = $customTitle ?? ($gt['title'] ?? 'Kesimpulan');
+
+                        $section->addText($displayTitle . ":", ['bold' => true, 'size' => 12, 'underline' => 'single']);
+                        
+                        // If there is a separate text title AND it is different from the group title we just displayed, show it as subtitle
+                        if (!empty($gt['title']) && $gt['title'] !== $customTitle) {
+                            $section->addText($this->htmlService->stripHtml($gt['title']), ['bold' => true]);
+                        }
+                        
+                        $this->formatResultTextForWord($gt['result_text'] ?? '', $section);
+                        
+                        if (!empty($gt['image'])) {
+                            $imagePath = public_path($gt['image']);
+                            if (file_exists($imagePath)) {
+                                $section->addImage($imagePath, ['width' => 150, 'alignment' => Jc::CENTER]);
+                            }
+                        }
+                        $section->addTextBreak(1);
                     }
                 }
             }

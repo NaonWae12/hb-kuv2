@@ -436,7 +436,7 @@ $responsesStats = $responsesStats ?? [
                                 <p class="text-xs text-gray-500 mt-1">Mengumpulkan alamat email responden</p>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="collect_email" class="sr-only peer" {{ ($formData['collect_email'] ?? false) ? 'checked' : '' }}>
+                                <input type="checkbox" id="collect-email" name="collect_email" class="sr-only peer" {{ ($formData['collect_email'] ?? false) ? 'checked' : '' }}>
                                 <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
                         </div>
@@ -448,7 +448,7 @@ $responsesStats = $responsesStats ?? [
                                 <p class="text-xs text-gray-500 mt-1">Membatasi setiap responden hanya bisa mengisi sekali</p>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="limit_one_response" class="sr-only peer" {{ ($formData['limit_one_response'] ?? false) ? 'checked' : '' }}>
+                                <input type="checkbox" id="limit-one-response" name="limit_one_response" class="sr-only peer" {{ ($formData['limit_one_response'] ?? false) ? 'checked' : '' }}>
                                 <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
                         </div>
@@ -460,7 +460,7 @@ $responsesStats = $responsesStats ?? [
                                 <p class="text-xs text-gray-500 mt-1">Menampilkan progress bar di bagian atas form</p>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="show_progress_bar" class="sr-only peer" {{ ($formData['show_progress_bar'] ?? true) ? 'checked' : '' }}>
+                                <input type="checkbox" id="show-progress-bar" name="show_progress_bar" class="sr-only peer" {{ ($formData['show_progress_bar'] ?? true) ? 'checked' : '' }}>
                                 <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                             </label>
                         </div>
@@ -485,7 +485,7 @@ $responsesStats = $responsesStats ?? [
                                     <p class="text-xs text-gray-500 mt-1">Hitung Indeks Massa Tubuh otomatis dari jawaban responden</p>
                                 </div>
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" id="use-bmi-formula" class="sr-only peer" {{ ($formData['use_bmi_formula'] ?? false) ? 'checked' : '' }}>
+                                    <input type="checkbox" id="use-bmi-formula" name="use_bmi_formula" class="sr-only peer" {{ ($formData['use_bmi_formula'] ?? false) ? 'checked' : '' }}>
                                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
                                 </label>
                             </div>

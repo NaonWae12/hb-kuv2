@@ -72,8 +72,8 @@ class FormService
                     'image' => $this->processImage($data['image'] ?? null, $form),
                     'image_alignment' => $data['image_alignment'] ?? 'center',
                     'image_wrap_mode' => $data['image_wrap_mode'] ?? 'fixed',
-                    'calculate_subtotal' => (bool)($data['calculate_subtotal'] ?? false),
-                    'include_in_total' => (bool)($data['include_in_total'] ?? true),
+                    'calculate_subtotal' => filter_var($data['calculate_subtotal'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                    'include_in_total' => filter_var($data['include_in_total'] ?? true, FILTER_VALIDATE_BOOLEAN),
                     'order' => $index,
                 ]
             );
@@ -176,7 +176,7 @@ class FormService
                     'answer_text' => trim($data['answer_text'] ?? ''),
                     'score' => $data['score'] ?? 0,
                     'order' => $index,
-                    'rule_group_id' => $data['rule_group_id'] ?? (string) Str::uuid(),
+                    'rule_group_id' => ($data['rule_group_id'] === 'default') ? null : ($data['rule_group_id'] ?? null),
                 ]
             );
             $templateIdMap[$index] = $template->id;
@@ -205,7 +205,7 @@ class FormService
                     'max_score' => $data['max_score'] ?? null,
                     'single_score' => $data['single_score'] ?? null,
                     'order' => $index,
-                    'rule_group_id' => $data['rule_group_id'] ?? (string) Str::uuid(),
+                    'rule_group_id' => ($data['rule_group_id'] === 'default') ? null : ($data['rule_group_id'] ?? null),
                 ]
             );
 
@@ -245,8 +245,8 @@ class FormService
         SettingResult::where('form_id', $form->id)->delete();
 
         foreach ($settings as $index => $data) {
-            $ruleGroupId = $data['rule_group_id'] ?? null;
-            if (!$ruleGroupId) continue;
+            $ruleGroupId = ($data['rule_group_id'] === 'default') ? null : ($data['rule_group_id'] ?? null);
+            if ($ruleGroupId === null && $data['rule_group_id'] !== 'default') continue;
 
             $cardImagePath = $this->processImage($data['card_image'] ?? null, $form);
             $rules = $form->resultRules()->where('rule_group_id', $ruleGroupId)->with('texts')->get();
@@ -566,6 +566,8 @@ class FormService
                 'image_alignment' => $section->image_alignment ?? 'center',
                 'image_wrap_mode' => $section->image_wrap_mode ?? 'fixed',
                 'image_url' => $section->image ? asset($section->image) : null,
+                'calculate_subtotal' => (bool) $section->calculate_subtotal,
+                'include_in_total' => (bool) $section->include_in_total,
             ];
         })->toArray();
 
@@ -900,7 +902,7 @@ class FormService
             ];
         })->values()->toArray();
 
-        $individualResponses = $responses->map(function ($response, $index) {
+        $individualResponses = $responses->map(function ($response, $index) use ($form) {
             return [
                 'id' => $response->id,
                 'position' => $index + 1,
@@ -909,7 +911,63 @@ class FormService
                 'total_score' => $response->total_score,
                 'result_text' => $response->result_text,
                 'section_scores' => $response->section_scores,
-                'derived_metrics' => $response->derived_metrics,
+                'derived_metrics' => collect($response->derived_metrics)->map(function($metric, $key) use ($form) {
+                    if ($key === 'result_details' && isset($metric['texts']) && is_array($metric['texts'])) {
+                     // Build lookup map only if needed (optimization: could be moved up if used frequently)
+                         static $ruleTextMap = null;
+                         if ($ruleTextMap === null) {
+                             $ruleTexts = DB::table('result_rule_texts')
+                                ->join('result_rules', 'result_rule_texts.result_rule_id', '=', 'result_rules.id')
+                                ->where('result_rules.form_id', $form->id)
+                                ->select('result_rule_texts.result_text', 'result_rules.rule_group_id')
+                                ->get();
+                             
+                             $ruleTextMap = [];
+                             foreach ($ruleTexts as $rt) {
+                                 $ruleTextMap[$rt->result_text][] = $rt->rule_group_id;
+                             }
+                         }
+
+                         // Create a temporary copy of candidates for consumption per response
+                         $candidates = $ruleTextMap;
+
+                         foreach ($metric['texts'] as &$textItem) {
+                             if (empty($textItem['rule_group_id']) && !empty($textItem['result_text'])) {
+                                 $text = $textItem['result_text'];
+                                 if (isset($candidates[$text]) && !empty($candidates[$text])) {
+                                     // Shift the first candidate off to avoid reuse if possible
+                                     // (e.g. if we have 2 items with same text, and 2 groups, we assign one to each)
+                                     $textItem['rule_group_id'] = array_shift($candidates[$text]);
+                                     
+                                     // If we ran out of candidates but encounter the text again?
+                                     // We might want to "refill" or just peek? 
+                                     // For now, shifting is good for distinct 1-to-1 mapping restoration.
+                                     // If the user actually used the SAME group for multiple same texts, this might split them, 
+                                     // but that's less likely than the collision case.
+                                     // To be safe, if empty, maybe fallback to the last used?
+                                     // But array_shift returns the value.
+                                 } elseif (isset($ruleTextMap[$text]) && !empty($ruleTextMap[$text])) {
+                                     // Backup: If we exhausted specific candidates (e.g. response has 3 items, DB only knows 2 groups),
+                                     // just fallback to the first known group.
+                                     $textItem['rule_group_id'] = $ruleTextMap[$text][0];
+                                 }
+                             }
+                         }
+                         return $metric;
+                    }
+
+                    if ($key === 'bmi' && !isset($metric['category']) && isset($metric['value'])) {
+                        $bmiValue = $metric['value'];
+                        $category = 'Tidak Diketahui';
+                        if ($bmiValue < 18.5) $category = 'BB kurang';
+                        elseif ($bmiValue >= 18.5 && $bmiValue <= 22.9) $category = 'BB normal';
+                        elseif ($bmiValue >= 23.0 && $bmiValue <= 24.9) $category = 'Berisiko menjadi obesitas';
+                        elseif ($bmiValue >= 25.0 && $bmiValue <= 29.9) $category = 'Obesitas tingkat I';
+                        elseif ($bmiValue >= 30.0) $category = 'Obesitas tingkat II';
+                        $metric['category'] = $category;
+                    }
+                    return $metric;
+                })->toArray(),
                 'answers' => $response->answers->map(function ($answer) {
                     return [
                         'question' => $answer->question->title ?? 'Pertanyaan',
@@ -932,6 +990,7 @@ class FormService
                 'id' => $s->id,
                 'title' => $s->title,
                 'calculate_subtotal' => $s->calculate_subtotal,
+                'include_in_total' => $s->include_in_total,
             ])->toArray(),
             'questionSummaries' => $questionSummaries,
             'individualResponses' => $individualResponses,

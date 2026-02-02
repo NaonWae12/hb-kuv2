@@ -212,6 +212,7 @@ $formDescriptionStyleAttr = $formDescriptionStyleValue ? ' style="' . htmlspecia
                 <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Metrik Kesehatan</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     @foreach($derivedMetrics as $key => $metric)
+                    @if(!is_array($metric) || !isset($metric['label'])) @continue @endif
                     <div class="bg-red-50 rounded-xl p-4 border border-red-100">
                         <p class="text-xs text-red-600 font-medium mb-1">{{ $metric['label'] }}</p>
                         <div class="flex items-end space-x-2">
@@ -220,6 +221,9 @@ $formDescriptionStyleAttr = $formDescriptionStyleValue ? ' style="' . htmlspecia
                             <span class="text-sm text-red-500 pb-1">kg/m²</span>
                             @endif
                         </div>
+                        @if($key === 'bmi' && isset($metric['category']))
+                        <p class="text-sm font-bold text-red-600 mt-1">{{ $metric['category'] }}</p>
+                        @endif
                         @if($key === 'bmi' && isset($metric['weight']) && isset($metric['height']))
                         <p class="text-[10px] text-red-400 mt-2">Berdasarkan BB: {{ $metric['weight'] }}kg, TB: {{ $metric['height'] }}cm</p>
                         @endif
@@ -269,42 +273,17 @@ $formDescriptionStyleAttr = $formDescriptionStyleValue ? ' style="' . htmlspecia
         @endphp
 
         @if (!empty($texts))
-        @if(count($texts) > 1)
-        {{-- Multiple result texts - display each in separate card --}}
-        @foreach($texts as $textItem)
-        <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
-            @if (!empty($textItem['title']))
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">{{ $textItem['title'] }}</h2>
-            @endif
-
-            @if (!empty($textItem['image_url']))
-            <div class="mb-4 {{ $imageAlignClass }}">
-                <img src="{{ $textItem['image_url'] }}" alt="{{ $textItem['title'] ?? 'Result image' }}"
-                    class="inline-block max-w-full h-auto rounded-lg border border-gray-200"
-                    style="max-height: 400px;">
-            </div>
-            @endif
-
-            @if (!empty($textItem['result_text']))
-            <div class="{{ $textAlignClass }}">
-                <p class="text-sm text-gray-700 whitespace-pre-line">{{ $textItem['result_text'] }}</p>
-            </div>
-            @endif
-        </div>
-        @endforeach
-        @else
-        {{-- Single result text - display in one card --}}
-        <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
-            <h2 class="text-xl font-semibold text-gray-900 mb-4">Hasil</h2>
-
+        <div class="space-y-6">
+            @if(count($texts) > 1)
+            {{-- Multiple result texts - display each in separate card --}}
             @foreach($texts as $textItem)
-            <div class="space-y-4">
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
                 @if (!empty($textItem['title']))
-                <h3 class="text-lg font-medium text-gray-900">{{ $textItem['title'] }}</h3>
+                <h2 class="text-xl font-semibold text-gray-900 mb-4">{{ $textItem['title'] }}</h2>
                 @endif
 
                 @if (!empty($textItem['image_url']))
-                <div class="{{ $imageAlignClass }}">
+                <div class="mb-4 {{ $imageAlignClass }}">
                     <img src="{{ $textItem['image_url'] }}" alt="{{ $textItem['title'] ?? 'Result image' }}"
                         class="inline-block max-w-full h-auto rounded-lg border border-gray-200"
                         style="max-height: 400px;">
@@ -312,14 +291,44 @@ $formDescriptionStyleAttr = $formDescriptionStyleValue ? ' style="' . htmlspecia
                 @endif
 
                 @if (!empty($textItem['result_text']))
-                <div class="{{ $textAlignClass }}">
-                    <p class="text-sm text-gray-700 whitespace-pre-line">{{ $textItem['result_text'] }}</p>
+                <div class="{{ $textAlignClass }} prose max-w-none text-gray-700">
+                    {!! $textItem['result_text'] !!}
                 </div>
                 @endif
             </div>
             @endforeach
+            @else
+            {{-- Single result text or unified display --}}
+            <div class="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
+                @foreach($texts as $textItem)
+                <div class="space-y-4">
+                    @if (!empty($textItem['title']))
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">{{ $textItem['title'] }}</h2>
+                    @elseif($loop->first)
+                    <h2 class="text-xl font-semibold text-gray-900 mb-4">Hasil Interpretasi</h2>
+                    @endif
+
+                    @if (!empty($textItem['image_url']))
+                    <div class="{{ $imageAlignClass }}">
+                        <img src="{{ $textItem['image_url'] }}" alt="{{ $textItem['title'] ?? 'Result image' }}"
+                            class="inline-block max-w-full h-auto rounded-lg border border-gray-200"
+                            style="max-height: 400px;">
+                    </div>
+                    @endif
+
+                    @if (!empty($textItem['result_text']))
+                    <div class="{{ $textAlignClass }} prose max-w-none text-gray-700">
+                        {!! $textItem['result_text'] !!}
+                    </div>
+                    @endif
+                </div>
+                @if(!$loop->last)
+                <hr class="my-6 border-gray-100">
+                @endif
+                @endforeach
+            </div>
+            @endif
         </div>
-        @endif
         @endif
         </div>
         @endif
